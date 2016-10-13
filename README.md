@@ -194,4 +194,4 @@ node benchmark.js
 
 ## AEAD Ciphers
 
-AEAD ciphers such as GCM are not currently supported and may be added in future as an `aead` method.
+AEAD ciphers such as GCM are currently not supported and may be added in future as an `aead` method.
