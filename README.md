@@ -1,5 +1,5 @@
 # crypto-async
-Native Cipher, Hash, and HMAC executed asynchronously in the `node.js` threadpool without blocking the event-loop, providing multi-core throughput.
+Native Cipher, Hash, and HMAC executed in the `node.js` threadpool and providing multi-core throughput.
 
 ## Motivation
 #### Some issues with parts of the `crypto` module
@@ -179,10 +179,6 @@ cryptoAsync.hmac(
 );
 ```
 
-### AEAD Ciphers
-
-AEAD ciphers such as GCM are not currently supported and may be added in future as an `aead` method if there is sufficient demand.
-
 ## Tests
 `crypto-async` ships with a long-running fuzz test:
 
@@ -195,3 +191,7 @@ To benchmark `crypto-async` vs `crypto`:
 ```
 node benchmark.js
 ```
+
+### AEAD Ciphers
+
+AEAD ciphers such as GCM are not currently supported and may be added in future as an `aead` method.
