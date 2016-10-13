@@ -1,0 +1,40 @@
+{
+  "name": "crypto-async",
+  "version": "0.1.0",
+  "description": "Asynchronous hash, hmac, cipher",
+  "main": "./build/Release/binding.node",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jorangreef/crypto-async.git"
+  },
+  "keywords": [
+    "async",
+    "asynchronous",
+    "crypto",
+    "hash",
+    "hmac",
+    "cipher",
+    "cipheriv",
+    "decipher",
+    "decipheriv",
+    "threadpool",
+    "worker",
+    "zero-copy",
+    "throughput",
+    "non-blocking",
+    "event loop"
+  ],
+  "author": "Joran Dirk Greef",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/jorangreef/crypto-async/issues"
+  },
+  "homepage": "https://github.com/jorangreef/crypto-async#readme",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "nan": "^2.0.0"
+  },
+  "gypfile": true
+}
