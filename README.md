@@ -104,16 +104,16 @@ npm install crypto-async
 var cryptoAsync = require('crypto-async');
 var algorithm = 'AES-256-CTR';
 var encrypt = 1; // 0 = Decrypt, 1 = Encrypt
-var key = new Buffer(1024);
+var key = Buffer.alloc(1024);
 var keyOffset = 4;
 var keySize = 32;
-var iv = new Buffer(32);
+var iv = Buffer.alloc(32);
 var ivOffset = 2;
 var ivSize = 16;
-var source = new Buffer(1024 * 1024);
+var source = Buffer.alloc(1024 * 1024);
 var sourceOffset = 512;
-var sourceSize = 65536;
-var target = new Buffer(1024 * 1024);
+var sourceSize = 32;
+var target = Buffer.alloc(1024 * 1024);
 var targetOffset = 32768;
 cryptoAsync.cipher(
   algorithm,
@@ -129,7 +129,11 @@ cryptoAsync.cipher(
   sourceSize,
   target,
   targetOffset,
-  function(error, targetSize) {}
+  function(error, targetSize) {
+    if (error) throw error;
+    var slice = target.slice(targetOffset, targetOffset + targetSize);
+    console.log(slice.toString('hex'));
+  }
 );
 ```
 
@@ -137,10 +141,10 @@ cryptoAsync.cipher(
 ```
 var cryptoAsync = require('crypto-async');
 var algorithm = 'SHA256';
-var source = new Buffer(1024 * 1024);
+var source = Buffer.alloc(1024 * 1024);
 var sourceOffset = 512;
 var sourceSize = 65536;
-var target = new Buffer(1024 * 1024);
+var target = Buffer.alloc(1024 * 1024);
 var targetOffset = 32768;
 cryptoAsync.hash(
   algorithm,
@@ -149,7 +153,11 @@ cryptoAsync.hash(
   sourceSize,
   target,
   targetOffset,
-  function(error) {}
+  function(error) {
+    if (error) throw error;
+    var slice = target.slice(targetOffset, targetOffset + 32);
+    console.log(slice.toString('hex'));
+  }
 );
 ```
 
@@ -157,13 +165,13 @@ cryptoAsync.hash(
 ```
 var cryptoAsync = require('crypto-async');
 var algorithm = 'SHA256';
-var key = new Buffer(1024);
+var key = Buffer.alloc(1024);
 var keyOffset = 4;
 var keySize = 8;
-var source = new Buffer(1024 * 1024);
+var source = Buffer.alloc(1024 * 1024);
 var sourceOffset = 512;
 var sourceSize = 65536;
-var target = new Buffer(1024 * 1024);
+var target = Buffer.alloc(1024 * 1024);
 var targetOffset = 32768;
 cryptoAsync.hmac(
   algorithm,
@@ -175,7 +183,11 @@ cryptoAsync.hmac(
   sourceSize,
   target,
   targetOffset,
-  function(error) {}
+  function(error) {
+    if (error) throw error;
+    var slice = target.slice(targetOffset, targetOffset + 32);
+    console.log(slice.toString('hex'));
+  }
 );
 ```
 
