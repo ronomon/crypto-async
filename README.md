@@ -1,5 +1,5 @@
 # crypto-async
-Native Cipher, Hash, and HMAC executed in the `node.js` threadpool and providing multi-core throughput.
+Native Cipher, Hash, and HMAC operations executed in Node's threadpool for multi-core throughput.
 
 ## Motivation
 #### Some issues with parts of the `crypto` module
