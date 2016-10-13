@@ -14,7 +14,7 @@ Native Cipher, Hash, and HMAC operations executed in Node's threadpool for multi
 * Scalable across multiple CPU cores. While `crypto-async` is a fraction slower per call than `crypto` (possibly because of the overhead of interacting with the threadpool), for buffers larger than 1024 bytes it shines and provides N-cores more throughput. `crypto-async` achieves up to 3x more throughput compared to `crypto`.
 * Zero-copy. All keys, ivs, source and target arguments can be passed directly using offsets into existing buffers, without requiring any slices and without allocating any temporary output buffers. This enables predictable memory usage for programs with tight memory budgets.
 * Designed to support the common use-case of encrypting or hashing a single buffer, where memory is adequate and buffers are already in memory. This avoids multiple round-trips between JS and C++.
-* Separates the data plane from the control plane to enable high-throughput applications.
+* Separates the control plane and the data plane to enable high-throughput applications.
 
 ## Performance
 ```
