@@ -192,6 +192,6 @@ To benchmark `crypto-async` vs `crypto`:
 node benchmark.js
 ```
 
-### AEAD Ciphers
+## AEAD Ciphers
 
 AEAD ciphers such as GCM are not currently supported and may be added in future as an `aead` method.
