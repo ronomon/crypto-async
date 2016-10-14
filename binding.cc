@@ -443,3 +443,5 @@ NAN_MODULE_INIT(Init) {
 }
 
 NODE_MODULE(binding, Init);
+
+// S.D.G.
