@@ -125,7 +125,7 @@ function display(columns) {
 console.log('');
 display([ 'CPU:', cpu ]);
 display([ 'Cores:', cores ]);
-display([ 'Concurrency:', concurrency ]);
+display([ 'Threads:', concurrency ]);
 
 var queue = new common.QueueStream();
 queue.onData = function(type, end) {
