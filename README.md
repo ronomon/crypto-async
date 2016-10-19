@@ -21,7 +21,7 @@ Native Cipher, Hash, and HMAC operations executed in Node's threadpool for multi
 
            CPU: Intel(R) Xeon(R) CPU E3-1230 V2 @ 3.30GHz
          Cores: 8
-   Concurrency: 4
+       Threads: 4
 
 ============================================================
 
