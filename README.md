@@ -153,9 +153,9 @@ cryptoAsync.hash(
   sourceSize,
   target,
   targetOffset,
-  function(error) {
+  function(error, targetSize) {
     if (error) throw error;
-    var slice = target.slice(targetOffset, targetOffset + 32);
+    var slice = target.slice(targetOffset, targetOffset + targetSize);
     console.log(slice.toString('hex'));
   }
 );
@@ -183,9 +183,9 @@ cryptoAsync.hmac(
   sourceSize,
   target,
   targetOffset,
-  function(error) {
+  function(error, targetSize) {
     if (error) throw error;
-    var slice = target.slice(targetOffset, targetOffset + 32);
+    var slice = target.slice(targetOffset, targetOffset + targetSize);
     console.log(slice.toString('hex'));
   }
 );
