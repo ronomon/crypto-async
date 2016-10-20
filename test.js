@@ -39,22 +39,37 @@ Algorithms.Hash = Algorithms.HMAC = [
 
 var Compare = {};
 
-Compare.Cipher = function(a, b) {
+Compare.Cipher = function(a, b, aTargetSize, bTargetSize) {
   assertEqual('key', a.key, b.key);
   assertEqual('iv', a.iv, b.iv);
   assertEqual('source', a.source, b.source);
   assertEqual('target', a.target, b.target);
+  if (aTargetSize !== bTargetSize) {
+    throw new Error(
+      'aTargetSize=' + aTargetSize + ' !== bTargetSize=' + bTargetSize
+    );
+  }
 };
 
-Compare.Hash = function(a, b) {
+Compare.Hash = function(a, b, aTargetSize, bTargetSize) {
   assertEqual('source', a.source, b.source);
   assertEqual('target', a.target, b.target);
+  if (aTargetSize !== bTargetSize) {
+    throw new Error(
+      'aTargetSize=' + aTargetSize + ' !== bTargetSize=' + bTargetSize
+    );
+  }
 };
 
-Compare.HMAC = function(a, b) {
+Compare.HMAC = function(a, b, aTargetSize, bTargetSize) {
   assertEqual('key', a.key, b.key);
   assertEqual('source', a.source, b.source);
   assertEqual('target', a.target, b.target);
+  if (aTargetSize !== bTargetSize) {
+    throw new Error(
+      'aTargetSize=' + aTargetSize + ' !== bTargetSize=' + bTargetSize
+    );
+  }
 };
 
 var Describe = {};
@@ -184,12 +199,12 @@ queue.onData = function(test, end) {
   var b = new common.Vector[test.type](Algorithms[test.type], a);
   Describe[test.type](test.index, a);
   Execute[test.type](binding, a,
-    function(error) {
+    function(error, aTargetSize) {
       if (error) return end(error);
       Execute[test.type](common.independent, b,
-        function(error) {
+        function(error, bTargetSize) {
           if (error) return end(error);
-          Compare[test.type](a, b);
+          Compare[test.type](a, b, aTargetSize, bTargetSize);
           end();
         }
       );

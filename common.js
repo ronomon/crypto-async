@@ -89,8 +89,8 @@ independent.hash = function(
 ) {
   var hash = crypto.createHash(algorithm);
   hash.update(source.slice(sourceOffset, sourceOffset + sourceSize));
-  hash.digest().copy(target, targetOffset);
-  end();
+  var targetSize = hash.digest().copy(target, targetOffset);
+  end(undefined, targetSize);
 };
 
 independent.hmac = function(
@@ -107,8 +107,8 @@ independent.hmac = function(
 ) {
   var hash = crypto.createHmac(algorithm, key.slice(keyOffset, keyOffset + keySize));
   hash.update(source.slice(sourceOffset, sourceOffset + sourceSize));
-  hash.digest().copy(target, targetOffset);
-  end();
+  var targetSize = hash.digest().copy(target, targetOffset);
+  end(undefined, targetSize);
 };
 
 var QueueStream = function(concurrent, onEnd) {

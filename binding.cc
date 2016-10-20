@@ -113,12 +113,14 @@ class HashWorker : public Nan::AsyncWorker {
     const size_t sourceSize,
     v8::Local<v8::Object> &targetHandle,
     const size_t targetOffset,
+    const size_t targetSize,
     Nan::Callback *end
   ) : Nan::AsyncWorker(end),
       digest(digest),
       sourceOffset(sourceOffset),
       sourceSize(sourceSize),
-      targetOffset(targetOffset) {
+      targetOffset(targetOffset),
+      targetSize(targetSize) {
         SaveToPersistent("sourceHandle", sourceHandle);
         SaveToPersistent("targetHandle", targetHandle);
         source = reinterpret_cast<const unsigned char*>(node::Buffer::Data(sourceHandle));
@@ -148,11 +150,22 @@ class HashWorker : public Nan::AsyncWorker {
     EVP_MD_CTX_cleanup(&ctx);
   }
 
+  void HandleOKCallback () {
+    Nan::HandleScope scope;
+
+    v8::Local<v8::Value> argv[] = {
+      Nan::Undefined(),
+      Nan::New<v8::Number>(targetSize)
+    };
+    callback->Call(2, argv);
+  }
+
  private:
   const EVP_MD* digest;
   const size_t sourceOffset;
   const size_t sourceSize;
   const size_t targetOffset;
+  const size_t targetSize;
   const unsigned char* source;
   unsigned char* target;
 };
@@ -169,6 +182,7 @@ class HMACWorker : public Nan::AsyncWorker {
     const size_t sourceSize,
     v8::Local<v8::Object> &targetHandle,
     const size_t targetOffset,
+    const size_t targetSize,
     Nan::Callback *end
   ) : Nan::AsyncWorker(end),
       digest(digest),
@@ -176,7 +190,8 @@ class HMACWorker : public Nan::AsyncWorker {
       keySize(keySize),
       sourceOffset(sourceOffset),
       sourceSize(sourceSize),
-      targetOffset(targetOffset) {
+      targetOffset(targetOffset),
+      targetSize(targetSize) {
         SaveToPersistent("keyHandle", keyHandle);
         SaveToPersistent("sourceHandle", sourceHandle);
         SaveToPersistent("targetHandle", targetHandle);
@@ -216,6 +231,16 @@ class HMACWorker : public Nan::AsyncWorker {
     HMAC_CTX_cleanup(&ctx);
   }
 
+  void HandleOKCallback () {
+    Nan::HandleScope scope;
+
+    v8::Local<v8::Value> argv[] = {
+      Nan::Undefined(),
+      Nan::New<v8::Number>(targetSize)
+    };
+    callback->Call(2, argv);
+  }
+
  private:
   const EVP_MD* digest;
   const size_t keyOffset;
@@ -223,6 +248,7 @@ class HMACWorker : public Nan::AsyncWorker {
   const size_t sourceOffset;
   const size_t sourceSize;
   const size_t targetOffset;
+  const size_t targetSize;
   const unsigned char* key;
   const unsigned char* source;
   unsigned char* target;
@@ -363,7 +389,8 @@ NAN_METHOD(hash) {
   if (sourceOffset + sourceSize > node::Buffer::Length(sourceHandle)) {
     return Nan::ThrowError("source would overflow");
   }
-  if (targetOffset + EVP_MD_size(digest) > node::Buffer::Length(targetHandle)) {
+  const size_t targetSize = EVP_MD_size(digest);
+  if (targetOffset + targetSize > node::Buffer::Length(targetHandle)) {
     return Nan::ThrowError("target too small");
   }
   Nan::AsyncQueueWorker(new HashWorker(
@@ -373,6 +400,7 @@ NAN_METHOD(hash) {
     sourceSize,
     targetHandle,
     targetOffset,
+    targetSize,
     end
   ));
 }
@@ -418,7 +446,8 @@ NAN_METHOD(hmac) {
   if (sourceOffset + sourceSize > node::Buffer::Length(sourceHandle)) {
     return Nan::ThrowError("source would overflow");
   }
-  if (targetOffset + EVP_MD_size(digest) > node::Buffer::Length(targetHandle)) {
+  const size_t targetSize = EVP_MD_size(digest);
+  if (targetOffset + targetSize > node::Buffer::Length(targetHandle)) {
     return Nan::ThrowError("target too small");
   }
   Nan::AsyncQueueWorker(new HMACWorker(
@@ -431,6 +460,7 @@ NAN_METHOD(hmac) {
     sourceSize,
     targetHandle,
     targetOffset,
+    targetSize,
     end
   ));
 }
