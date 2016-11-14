@@ -99,6 +99,21 @@ npm install crypto-async
 
 ## Usage
 
+#### Adjust threadpool size and control concurrency
+Node runs filesystem and DNS operations in the threadpool. The threadpool consists of 4 threads by default. This means that at most 4 operations can be running at any point in time. If any operation is slow to complete, it will cause head-of-line blocking. The size of the threadpool should therefore be increased at startup time (at the top of your script, before requiring any modules) by setting the `UV_THREADPOOL_SIZE` environment variable (the absolute maximum is 128 threads, which requires only ~1 MB memory in total according to the [libuv docs](http://docs.libuv.org/en/v1.x/threadpool.html)).
+
+Conventional wisdom would set the number of threads to the number of CPU cores, but most operations running in the threadpool are not run hot, they are not CPU-intensive and block mostly on IO. Issuing more IO operations than there are CPU cores will increase throughput and will decrease latency per operation by decreasing queueing time. On the other hand, `crypto-async` operations are CPU-intensive. Issuing more `crypto-async` operations than there are CPU cores will not increase throughput and will increase latency per operation by increasing queueing time.
+
+You should therefore:
+
+1. Set the threadpool size to `IO` + `N`, where `IO` is the number of filesystem and DNS operations you expect to be running concurrently, and where `N` is the number of CPU cores available. This will reduce head-of-line blocking.
+
+2. Allow or design for at most `N` `crypto-async` operations to be running concurrently, where `N` is the number of CPU cores available. This will keep latency within reasonable bounds.
+
+```
+process.env['UV_THREADPOOL_SIZE'] = 128;
+```
+
 #### Cipher
 ```
 var cryptoAsync = require('crypto-async');
