@@ -12,6 +12,7 @@ var binding = {
   'crypto': common.independent,
   'crypto-async': require('.')
 };
+var Queue = require('ronomon-queue');
 
 var Algorithms = {};
 
@@ -81,7 +82,7 @@ function benchmark(type, vectors, name, binding, end) {
   var sum = 0;
   var time = 0;
   var count = 0;
-  var queue = new common.QueueStream(queueConcurrency);
+  var queue = new Queue(queueConcurrency);
   queue.onData = function(vector, end) {
     var hrtime = process.hrtime();
     Execute[type](binding, vector,
@@ -127,11 +128,11 @@ display([ 'CPU:', cpu ]);
 display([ 'Cores:', cores ]);
 display([ 'Threads:', concurrency ]);
 
-var queue = new common.QueueStream();
+var queue = new Queue();
 queue.onData = function(type, end) {
   console.log('');
   console.log('============================================================');
-  var queue = new common.QueueStream();
+  var queue = new Queue();
   queue.onData = function(sourceSize, end) {
     var vectors = [];
     var length = Math.min(10000, Math.round(ram / 4 / sourceSize));
@@ -152,7 +153,7 @@ queue.onData = function(type, end) {
         sourceSize
       ));
     }
-    var queue = new common.QueueStream();
+    var queue = new Queue();
     queue.onData = function(name, end) {
       benchmark(type, vectors, name, binding[name], end);
     };

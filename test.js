@@ -1,5 +1,6 @@
 var common = require('./common.js');
 var binding = require('.');
+var Queue = require('ronomon-queue');
 
 var assertEqual = function(key, a, b) {
   try {
@@ -193,7 +194,7 @@ Execute.HMAC = function(binding, vector, end) {
 
 console.log('\r\n  SEED=' + common.seed + '\r\n');
 
-var queue = new common.QueueStream(1);
+var queue = new Queue(1);
 queue.onData = function(test, end) {
   var a = new common.Vector[test.type](Algorithms[test.type], undefined);
   var b = new common.Vector[test.type](Algorithms[test.type], a);
