@@ -110,12 +110,12 @@ You should therefore:
 
 2. Allow or design for at most `N` `crypto-async` operations to be running concurrently, where `N` is the number of CPU cores available. This will keep latency within reasonable bounds.
 
-```
+```javascript
 process.env['UV_THREADPOOL_SIZE'] = 128;
 ```
 
 #### Cipher
-```
+```javascript
 var cryptoAsync = require('crypto-async');
 var algorithm = 'AES-256-CTR';
 var encrypt = 1; // 0 = Decrypt, 1 = Encrypt
@@ -153,7 +153,7 @@ cryptoAsync.cipher(
 ```
 
 #### Hash
-```
+```javascript
 var cryptoAsync = require('crypto-async');
 var algorithm = 'SHA256';
 var source = Buffer.alloc(1024 * 1024);
@@ -177,7 +177,7 @@ cryptoAsync.hash(
 ```
 
 #### HMAC
-```
+```javascript
 var cryptoAsync = require('crypto-async');
 var algorithm = 'SHA256';
 var key = Buffer.alloc(1024);
