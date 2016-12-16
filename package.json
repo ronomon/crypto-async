@@ -1,6 +1,6 @@
 {
   "name": "crypto-async",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Asynchronous cipher, hash, hmac",
   "main": "./build/Release/binding.node",
   "repository": {
