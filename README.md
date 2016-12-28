@@ -156,6 +156,7 @@ concurrently, where `N` is the number of CPU cores available. This will keep
 latency within reasonable bounds.
 
 ```javascript
+// At the top of your script, before requiring any modules:
 process.env['UV_THREADPOOL_SIZE'] = 128;
 ```
 
