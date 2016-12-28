@@ -118,6 +118,56 @@ process.env['UV_THREADPOOL_SIZE'] = 128;
 ```javascript
 var cryptoAsync = require('crypto-async');
 var algorithm = 'AES-256-CTR';
+var encrypt = 1; // 1 = Encrypt
+var key = Buffer.alloc(32);
+var iv = Buffer.alloc(16);
+var plaintext = Buffer.alloc(128);
+cryptoAsync.cipher(algorithm, encrypt, key, iv, plaintext,
+  function(error, ciphertext) {
+    if (error) throw error;
+    console.log(ciphertext.toString('hex'));
+    var encrypt = 0; // 0 = Decrypt
+    cryptoAsync.cipher(algorithm, encrypt, key, iv, ciphertext,
+      function(error, plaintext) {
+        if (error) throw error;
+        console.log(plaintext.toString('hex'));
+      }
+    );
+  }
+);
+```
+
+#### Hash
+```javascript
+var cryptoAsync = require('crypto-async');
+var algorithm = 'SHA256';
+var source = Buffer.alloc(1024 * 1024);
+cryptoAsync.hash(algorithm, source,
+  function(error, hash) {
+    if (error) throw error;
+    console.log(hash.toString('hex'));
+  }
+);
+```
+
+#### HMAC
+```javascript
+var cryptoAsync = require('crypto-async');
+var algorithm = 'SHA256';
+var key = Buffer.alloc(1024);
+var source = Buffer.alloc(1024 * 1024);
+cryptoAsync.hmac(algorithm, key, source,
+  function(error, hmac) {
+    if (error) throw error;
+    console.log(hmac.toString('hex'));
+  }
+);
+```
+
+#### Cipher (Zero-Copy)
+```javascript
+var cryptoAsync = require('crypto-async');
+var algorithm = 'AES-256-CTR';
 var encrypt = 1; // 0 = Decrypt, 1 = Encrypt
 var key = Buffer.alloc(1024);
 var keyOffset = 4;
@@ -152,7 +202,7 @@ cryptoAsync.cipher(
 );
 ```
 
-#### Hash
+#### Hash (Zero-Copy)
 ```javascript
 var cryptoAsync = require('crypto-async');
 var algorithm = 'SHA256';
@@ -176,7 +226,7 @@ cryptoAsync.hash(
 );
 ```
 
-#### HMAC
+#### HMAC (Zero-Copy)
 ```javascript
 var cryptoAsync = require('crypto-async');
 var algorithm = 'SHA256';

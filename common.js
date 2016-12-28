@@ -49,22 +49,38 @@ var random = rng.random.bind(rng);
 
 var independent = {};
 
-independent.cipher = function(
-  algorithm,
-  encrypt,
-  key,
-  keyOffset,
-  keySize,
-  iv,
-  ivOffset,
-  ivSize,
-  source,
-  sourceOffset,
-  sourceSize,
-  target,
-  targetOffset,
-  end
-) {
+independent.cipher = function() {
+  if (arguments.length === 6) {
+    var algorithm = arguments[0];
+    var encrypt = arguments[1];
+    var key = arguments[2];
+    var keyOffset = 0;
+    var keySize = key.length;
+    var iv = arguments[3];
+    var ivOffset = 0;
+    var ivSize = iv.length;
+    var source = arguments[4];
+    var sourceOffset = 0;
+    var sourceSize = source.length;
+    var target = Buffer.alloc(sourceSize + 128);
+    var targetOffset = 0;
+    var end = arguments[5];
+  } else {
+    var algorithm = arguments[0];
+    var encrypt = arguments[1];
+    var key = arguments[2];
+    var keyOffset = arguments[3];
+    var keySize = arguments[4];
+    var iv = arguments[5];
+    var ivOffset = arguments[6];
+    var ivSize = arguments[7];
+    var source = arguments[8];
+    var sourceOffset = arguments[9];
+    var sourceSize = arguments[10];
+    var target = arguments[11];
+    var targetOffset = arguments[12];
+    var end = arguments[13];
+  }
   var cipher = crypto[encrypt == 1 ? 'createCipheriv' : 'createDecipheriv'](
     algorithm,
     key.slice(keyOffset, keyOffset + keySize),
@@ -75,40 +91,73 @@ independent.cipher = function(
     cipher.final()
   ]);
   buffer.copy(target, targetOffset);
-  end(undefined, buffer.length);
+  if (arguments.length === 6) {
+    end(undefined, buffer);
+  } else {
+    end(undefined, buffer.length);
+  }
 };
 
-independent.hash = function(
-  algorithm,
-  source,
-  sourceOffset,
-  sourceSize,
-  target,
-  targetOffset,
-  end
-) {
+independent.hash = function() {
+  if (arguments.length === 3) {
+    var algorithm = arguments[0];
+    var source = arguments[1];
+    var sourceOffset = 0;
+    var sourceSize = source.length;
+    var target = Buffer.alloc(128);
+    var targetOffset = 0;
+    var end = arguments[2];
+  } else {
+    var algorithm = arguments[0];
+    var source = arguments[1];
+    var sourceOffset = arguments[2];
+    var sourceSize = arguments[3];
+    var target = arguments[4];
+    var targetOffset = arguments[5];
+    var end = arguments[6];
+  }
   var hash = crypto.createHash(algorithm);
   hash.update(source.slice(sourceOffset, sourceOffset + sourceSize));
   var targetSize = hash.digest().copy(target, targetOffset);
-  end(undefined, targetSize);
+  if (arguments.length === 3) {
+    end(undefined, target.slice(targetOffset, targetOffset + targetSize));
+  } else {
+    end(undefined, targetSize);
+  }
 };
 
-independent.hmac = function(
-  algorithm,
-  key,
-  keyOffset,
-  keySize,
-  source,
-  sourceOffset,
-  sourceSize,
-  target,
-  targetOffset,
-  end
-) {
-  var hash = crypto.createHmac(algorithm, key.slice(keyOffset, keyOffset + keySize));
-  hash.update(source.slice(sourceOffset, sourceOffset + sourceSize));
-  var targetSize = hash.digest().copy(target, targetOffset);
-  end(undefined, targetSize);
+independent.hmac = function() {
+  if (arguments.length === 4) {
+    var algorithm = arguments[0];
+    var key = arguments[1];
+    var keyOffset = 0;
+    var keySize = key.length;
+    var source = arguments[2];
+    var sourceOffset = 0;
+    var sourceSize = source.length;
+    var target = Buffer.alloc(128);
+    var targetOffset = 0;
+    var end = arguments[3];
+  } else {
+    var algorithm = arguments[0];
+    var key = arguments[1];
+    var keyOffset = arguments[2];
+    var keySize = arguments[3];
+    var source = arguments[4];
+    var sourceOffset = arguments[5];
+    var sourceSize = arguments[6];
+    var target = arguments[7];
+    var targetOffset = arguments[8];
+    var end = arguments[9];
+  }
+  var hmac = crypto.createHmac(algorithm, key.slice(keyOffset, keyOffset + keySize));
+  hmac.update(source.slice(sourceOffset, sourceOffset + sourceSize));
+  var targetSize = hmac.digest().copy(target, targetOffset);
+  if (arguments.length === 4) {
+    end(undefined, target.slice(targetOffset, targetOffset + targetSize));
+  } else {
+    end(undefined, targetSize);
+  }
 };
 
 function copyBuffer(buffer) {
@@ -185,6 +234,31 @@ Vector.Cipher = function(algorithms, a, sourceSize) {
   }
 };
 
+Vector.CipherEasy = function(algorithms, a, sourceSize) {
+  var self = this;
+  if (a) {
+    self.algorithm = a.algorithm;
+    self.encrypt = a.encrypt;
+    self.key = copyBuffer(a.key);
+    self.iv = copyBuffer(a.iv);
+    self.source = copyBuffer(a.source);
+  } else if (typeof sourceSize == 'number') {
+    var algorithm = algorithms[0];
+    self.algorithm = algorithm.name;
+    self.encrypt = 1;
+    self.key = randomBuffer(algorithm.keySize);
+    self.iv = randomBuffer(algorithm.ivSize);
+    self.source = randomBuffer(sourceSize);
+  } else {
+    var algorithm = algorithms[Math.floor(random() * algorithms.length)];
+    self.algorithm = algorithm.name;
+    self.encrypt = 1;
+    self.key = randomBuffer(algorithm.keySize);
+    self.iv = randomBuffer(algorithm.ivSize);
+    self.source = randomBuffer(randomSize());
+  }
+};
+
 Vector.Hash = function(algorithms, a, sourceSize) {
   var self = this;
   if (a) {
@@ -212,6 +286,22 @@ Vector.Hash = function(algorithms, a, sourceSize) {
     self.sourceSize = Math.floor(random() * (sourceLength - self.sourceOffset));
     self.target = randomBuffer(targetLength);
     self.targetOffset = Math.floor(random() * (targetLength - algorithm.targetSize));
+  }
+};
+
+Vector.HashEasy = function(algorithms, a, sourceSize) {
+  var self = this;
+  if (a) {
+    self.algorithm = a.algorithm;
+    self.source = copyBuffer(a.source);
+  } else if (typeof sourceSize == 'number') {
+    var algorithm = algorithms[0];
+    self.algorithm = algorithm.name;
+    self.source = randomBuffer(sourceSize);
+  } else {
+    var algorithm = algorithms[Math.floor(random() * algorithms.length)];
+    self.algorithm = algorithm.name;
+    self.source = randomBuffer(randomSize());
   }
 };
 
@@ -252,6 +342,25 @@ Vector.HMAC = function(algorithms, a, sourceSize) {
     self.sourceSize = Math.floor(random() * (sourceLength - self.sourceOffset));
     self.target = randomBuffer(targetLength);
     self.targetOffset = Math.floor(random() * (targetLength - algorithm.targetSize));
+  }
+};
+
+Vector.HMACEasy = function(algorithms, a, sourceSize) {
+  var self = this;
+  if (a) {
+    self.algorithm = a.algorithm;
+    self.key = copyBuffer(a.key);
+    self.source = copyBuffer(a.source);
+  } else if (typeof sourceSize == 'number') {
+    var algorithm = algorithms[0];
+    self.algorithm = algorithm.name;
+    self.key = randomBuffer(algorithm.targetSize);
+    self.source = randomBuffer(sourceSize);
+  } else {
+    var algorithm = algorithms[Math.floor(random() * algorithms.length)];
+    self.algorithm = algorithm.name;
+    self.key = randomBuffer(randomSize());
+    self.source = randomBuffer(randomSize());
   }
 };
 

@@ -2,7 +2,7 @@
   "name": "crypto-async",
   "version": "0.3.2",
   "description": "Asynchronous cipher, hash, hmac",
-  "main": "./build/Release/binding.node",
+  "main": "index.js",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jorangreef/crypto-async.git"
@@ -34,8 +34,8 @@
     "test": "node test.js"
   },
   "dependencies": {
-    "nan": "^2.4.0",
-    "ronomon-queue": "^0.1.1"
+    "nan": "^2.5.0",
+    "ronomon-queue": "^2.1.0"
   },
   "gypfile": true
 }

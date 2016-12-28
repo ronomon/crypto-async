@@ -112,7 +112,7 @@ function benchmark(type, vectors, name, binding, end) {
     // Rest between benchmarks to leave room for GC:
     setTimeout(end, 100);
   };
-  queue.push(vectors);
+  queue.concat(vectors);
   queue.end();
 }
 
@@ -158,29 +158,23 @@ queue.onData = function(type, end) {
       benchmark(type, vectors, name, binding[name], end);
     };
     queue.onEnd = end;
-    queue.push([
-      'crypto',
-      'crypto-async'
-    ]);
+    queue.push('crypto');
+    queue.push('crypto-async');
     queue.end();
   };
   queue.onEnd = end;
-  queue.push([
-    256,
-    1024,
-    4096,
-    65536,
-    1048576
-  ]);
+  queue.push(256);
+  queue.push(1024);
+  queue.push(4096);
+  queue.push(65536);
+  queue.push(1048576);
   queue.end();
 };
 queue.onEnd = function(error) {
   if (error) throw error;
   console.log('');
 };
-queue.push([
-  'Cipher',
-  'Hash',
-  'HMAC'
-]);
+queue.push('Cipher');
+queue.push('Hash');
+queue.push('HMAC');
 queue.end();
