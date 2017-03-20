@@ -12,7 +12,7 @@ var binding = {
   'crypto': common.independent,
   'crypto-async': require('.')
 };
-var Queue = require('ronomon-queue');
+var Queue = require('@ronomon/queue');
 
 var Algorithms = {};
 

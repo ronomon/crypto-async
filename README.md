@@ -121,7 +121,7 @@ applications.
 ## Installation
 This will install `crypto-async` and compile the native binding automatically:
 ```
-npm install crypto-async
+npm install @ronomon/crypto-async
 ```
 
 ## Usage
@@ -162,7 +162,7 @@ process.env['UV_THREADPOOL_SIZE'] = 128;
 
 #### Cipher
 ```javascript
-var cryptoAsync = require('crypto-async');
+var cryptoAsync = require('@ronomon/crypto-async');
 var algorithm = 'AES-256-CTR';
 var encrypt = 1; // 1 = Encrypt
 var key = Buffer.alloc(32);
@@ -185,7 +185,7 @@ cryptoAsync.cipher(algorithm, encrypt, key, iv, plaintext,
 
 #### Hash
 ```javascript
-var cryptoAsync = require('crypto-async');
+var cryptoAsync = require('@ronomon/crypto-async');
 var algorithm = 'SHA256';
 var source = Buffer.alloc(1024 * 1024);
 cryptoAsync.hash(algorithm, source,
@@ -198,7 +198,7 @@ cryptoAsync.hash(algorithm, source,
 
 #### HMAC
 ```javascript
-var cryptoAsync = require('crypto-async');
+var cryptoAsync = require('@ronomon/crypto-async');
 var algorithm = 'SHA256';
 var key = Buffer.alloc(1024);
 var source = Buffer.alloc(1024 * 1024);
@@ -217,7 +217,7 @@ crypto operations, for reduced memory overhead and GC pressure.
 
 #### Cipher (Zero-Copy)
 ```javascript
-var cryptoAsync = require('crypto-async');
+var cryptoAsync = require('@ronomon/crypto-async');
 var algorithm = 'AES-256-CTR';
 var encrypt = 1; // 0 = Decrypt, 1 = Encrypt
 var key = Buffer.alloc(1024);
@@ -255,7 +255,7 @@ cryptoAsync.cipher(
 
 #### Hash (Zero-Copy)
 ```javascript
-var cryptoAsync = require('crypto-async');
+var cryptoAsync = require('@ronomon/crypto-async');
 var algorithm = 'SHA256';
 var source = Buffer.alloc(1024 * 1024);
 var sourceOffset = 512;
@@ -279,7 +279,7 @@ cryptoAsync.hash(
 
 #### HMAC (Zero-Copy)
 ```javascript
-var cryptoAsync = require('crypto-async');
+var cryptoAsync = require('@ronomon/crypto-async');
 var algorithm = 'SHA256';
 var key = Buffer.alloc(1024);
 var keyOffset = 4;

@@ -1,6 +1,6 @@
 var common = require('./common.js');
 var binding = require('.');
-var Queue = require('ronomon-queue');
+var Queue = require('@ronomon/queue');
 
 var assertEqual = function(key, a, b) {
   try {
