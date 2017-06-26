@@ -47,8 +47,8 @@ applications.
 ```
 
            CPU: Intel(R) Xeon(R) CPU E3-1230 V2 @ 3.30GHz
-         Cores: 8
-       Threads: 4
+         Cores: 4
+       Threads: 8
 
 ============================================================
 
