@@ -1,4 +1,4 @@
 .DS_Store
-.jshintrc
+binding.node
 build
 node_modules
