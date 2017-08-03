@@ -31,6 +31,7 @@
   },
   "homepage": "https://github.com/ronomon/crypto-async#readme",
   "scripts": {
+    "postinstall": "node-gyp clean",
     "test": "node test.js"
   },
   "dependencies": {

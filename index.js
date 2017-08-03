@@ -1,6 +1,6 @@
 'use strict';
 
-var binding = require('./build/Release/binding.node');
+var binding = require('./binding.node');
 
 module.exports.cipher = function() {
   if (arguments.length === 14) return binding.cipher.apply(this, arguments);
