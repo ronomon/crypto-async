@@ -35,8 +35,8 @@
     "test": "node test.js"
   },
   "dependencies": {
-    "@ronomon/queue": "^2.1.0",
-    "nan": "^2.6.2"
+    "@ronomon/queue": "^3.0.0",
+    "nan": "^2.7.0"
   },
   "gypfile": true
 }
