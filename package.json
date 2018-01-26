@@ -36,7 +36,7 @@
   },
   "dependencies": {
     "@ronomon/queue": "^3.0.0",
-    "nan": "^2.7.0"
+    "nan": "^2.8.0"
   },
   "gypfile": true
 }
