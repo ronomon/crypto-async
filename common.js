@@ -150,7 +150,10 @@ independent.hmac = function() {
     var targetOffset = arguments[8];
     var end = arguments[9];
   }
-  var hmac = crypto.createHmac(algorithm, key.slice(keyOffset, keyOffset + keySize));
+  var hmac = crypto.createHmac(
+    algorithm,
+    key.slice(keyOffset, keyOffset + keySize)
+  );
   hmac.update(source.slice(sourceOffset, sourceOffset + sourceSize));
   var targetSize = hmac.digest().copy(target, targetOffset);
   if (arguments.length === 4) {
@@ -161,16 +164,24 @@ independent.hmac = function() {
 };
 
 function copyBuffer(buffer) {
-  var copy = new Buffer(buffer.length);
+  var copy = Buffer.alloc(buffer.length);
   buffer.copy(copy, 0);
   return copy;
 }
 
-function randomBuffer(size) {
-  var buffer = new Buffer(size);
-  buffer.fill(Math.floor(random() * 256));
-  return buffer;
-}
+var randomBuffer = (function() {
+  var key = Buffer.alloc(32, 1);
+  var iv = Buffer.alloc(16, 2);
+  var cipher = crypto.createCipheriv('AES-256-CTR', key, iv);
+  var buffer = Buffer.alloc(1024 * 1024);
+  return function(size) {
+    if (size <= buffer.length) {
+      return cipher.update(buffer.slice(0, size));
+    } else {
+      return cipher.update(Buffer.alloc(size));
+    }
+  };
+})();
 
 function randomSize() {
   if (random() < 0.05) return Math.floor(random() * 64);
@@ -230,7 +241,9 @@ Vector.Cipher = function(algorithms, a, sourceSize) {
     self.sourceOffset = Math.floor(random() * sourceLength);
     self.sourceSize = Math.floor(random() * (sourceLength - self.sourceOffset));
     self.target = randomBuffer(targetLength);
-    self.targetOffset = Math.floor(random() * (targetLength - sourceLength - 128));
+    self.targetOffset = Math.floor(
+      random() * (targetLength - sourceLength - 128)
+    );
   }
 };
 
@@ -283,9 +296,13 @@ Vector.Hash = function(algorithms, a, sourceSize) {
     var targetLength = randomSize() + algorithm.targetSize;
     self.source = randomBuffer(sourceLength);
     self.sourceOffset = Math.floor(random() * sourceLength);
-    self.sourceSize = Math.floor(random() * (sourceLength - self.sourceOffset));
+    self.sourceSize = Math.floor(
+      random() * (sourceLength - self.sourceOffset)
+    );
     self.target = randomBuffer(targetLength);
-    self.targetOffset = Math.floor(random() * (targetLength - algorithm.targetSize));
+    self.targetOffset = Math.floor(
+      random() * (targetLength - algorithm.targetSize)
+    );
   }
 };
 
@@ -341,7 +358,9 @@ Vector.HMAC = function(algorithms, a, sourceSize) {
     self.sourceOffset = Math.floor(random() * sourceLength);
     self.sourceSize = Math.floor(random() * (sourceLength - self.sourceOffset));
     self.target = randomBuffer(targetLength);
-    self.targetOffset = Math.floor(random() * (targetLength - algorithm.targetSize));
+    self.targetOffset = Math.floor(
+      random() * (targetLength - algorithm.targetSize)
+    );
   }
 };
 

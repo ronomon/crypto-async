@@ -191,7 +191,7 @@ Execute.Cipher = function(binding, vector, end) {
     vector.targetOffset,
     function(error, targetSize) {
       if (error) return end(error);
-      var temp = new Buffer(vector.sourceSize + 128);
+      var temp = Buffer.alloc(vector.sourceSize + 128);
       binding.cipher(
         vector.algorithm,
         0,
@@ -307,7 +307,9 @@ queue.onData = function(test, end) {
 };
 queue.onEnd = function(error) {
   if (error) throw error;
-  console.log('PASSED ALL TESTS\r\n');
+  console.log(new Array(16 + 1).join('='));
+  console.log('PASSED ALL TESTS');
+  console.log(new Array(16 + 1).join('='));
 };
 var tests = [];
 var index = 0;
