@@ -1,6 +1,6 @@
 {
   "name": "@ronomon/crypto-async",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Asynchronous cipher, hash, hmac",
   "main": "index.js",
   "files": [
