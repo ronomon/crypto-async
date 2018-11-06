@@ -3,6 +3,14 @@
   "version": "3.0.0",
   "description": "Asynchronous cipher, hash, hmac",
   "main": "index.js",
+  "files": [
+    "benchmark.js",
+    "binding.cc",
+    "binding.gyp",
+    "common.js",
+    "index.js",
+    "test.js"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ronomon/crypto-async.git"
@@ -40,6 +48,5 @@
   },
   "engines": {
     "node": ">=10.0.0"
-  },
-  "gypfile": true
+  }
 }
