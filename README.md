@@ -478,7 +478,7 @@ cryptoAsync.hmac(
 `@ronomon/crypto-async` ships with comprehensive fuzz tests, which have
 uncovered multiple bugs in OpenSSL:
 
-* [CVE-2019-1543: chacha20-poly1305 fails to detect IV tampering, where IV > 12 and IV <= CHACHA_CTR_SIZE](https://github.com/openssl/openssl/issues/8345)
+* [CVE-2019-1543: chacha20-poly1305 fails to detect IV tampering, where IV > 12 and IV <= CHACHA_CTR_SIZE](https://www.openssl.org/news/secadv/20190306.txt)
 
 * [EVP_CTRL_AEAD_SET_TAG fails for OCB](https://github.com/openssl/openssl/issues/8331)
 
