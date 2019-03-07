@@ -1,180 +1,196 @@
-var ram = 268435456;
-var cpus = require('os').cpus();
-var cpu = cpus[0].model;
-var cores = cpus.length;
-// Using more cores increases throughput.
-// Using more than 1/2 available cores can increase latency.
-var concurrency = Math.max(2, Math.round(cores / 2));
-process['UV_THREADPOOL_SIZE'] = cores;
+process['UV_THREADPOOL_SIZE'] = 64;
 
-var common = require('./common.js');
-var binding = {
-  'crypto': common.independent,
-  'crypto-async': require('.')
+var Cores = require('os').cpus().length;
+var Concurrency = Math.max(2, Math.round(Cores / 2));
+
+var Common = require('./common.js');
+
+var Binding = {
+  'node': Common.independent,
+  'sync @ronomon': require('.'),
+  'async @ronomon': require('.')
 };
+
 var Queue = require('@ronomon/queue');
 
-var Algorithms = {};
-
-Algorithms.Cipher = [
-  { name: 'AES-256-CTR', keySize: 32, ivSize: 16 }
-];
-
-Algorithms.Hash = Algorithms.HMAC = [
-  { name: 'SHA256', targetSize: 32 }
-];
-
-var Execute = {};
-
-Execute.Cipher = function(binding, vector, end) {
-  binding.cipher(
-    vector.algorithm,
-    1,
-    vector.key,
-    vector.keyOffset,
-    vector.keySize,
-    vector.iv,
-    vector.ivOffset,
-    vector.ivSize,
-    vector.source,
-    vector.sourceOffset,
-    vector.sourceSize,
-    vector.target,
-    vector.targetOffset,
-    end
-  );
-};
-
-Execute.Hash = function(binding, vector, end) {
-  binding.hash(
-    vector.algorithm,
-    vector.source,
-    vector.sourceOffset,
-    vector.sourceSize,
-    vector.target,
-    vector.targetOffset,
-    end
-  );
-};
-
-Execute.HMAC = function(binding, vector, end) {
-  binding.hmac(
-    vector.algorithm,
-    vector.key,
-    vector.keyOffset,
-    vector.keySize,
-    vector.source,
-    vector.sourceOffset,
-    vector.sourceSize,
-    vector.target,
-    vector.targetOffset,
-    end
-  );
-};
-
-function benchmark(type, vectors, name, binding, end) {
-  if (name == 'crypto-async') {
-    var queueConcurrency = concurrency;
-  } else {
-    var queueConcurrency = 1;
-  }
-  var now = Date.now();
-  var sum = 0;
-  var time = 0;
-  var count = 0;
-  var queue = new Queue(queueConcurrency);
-  queue.onData = function(vector, end) {
-    var hrtime = process.hrtime();
-    Execute[type](binding, vector,
-      function(error) {
-        if (error) return end(error);
-        var difference = process.hrtime(hrtime);
-        var ns = (difference[0] * 1e9) + difference[1];
-        sum += vector.sourceSize;
-        time += ns;
-        count++;
-        end();
+function Args(method, algorithm, sourceSize) {
+  var signatures = Common[method].signatures;
+  var signature = signatures[signatures.length - 1];
+  var array = [];
+  for (var index = 0; index < signature.length; index++) {
+    var key = signature[index];
+    switch (key) {
+    case 'algorithm':
+      array.push(algorithm.name);
+      break;
+    case 'encrypt':
+      array.push(1);
+      break;
+    case 'key':
+      if (!Slice(algorithm.keySize || 32, array)) return;
+      break;
+    case 'iv':
+      if (!Slice(algorithm.ivSize, array)) return;
+      break;
+    case 'source':
+      if (!Slice(sourceSize, array)) return;
+      break;
+    case 'aad':
+      if (!Slice(0, array)) return;
+      break;
+    case 'tag':
+      if (!Slice(algorithm.tagSize, array)) return;
+      break;
+    case 'keyOffset':
+    case 'ivOffset':
+    case 'sourceOffset':
+    case 'targetOffset':
+    case 'aadOffset':
+    case 'tagOffset':
+      array.push(0);
+      break;
+    case 'keySize':
+    case 'ivSize':
+    case 'sourceSize':
+    case 'aadSize':
+    case 'tagSize':
+      array.push(array[index - 2].length);
+      break;
+    case 'target':
+      if (method === 'cipher') {
+        if (!Slice(sourceSize + 32, array)) return;
+      } else {
+        if (!Slice(64, array)) return;
       }
-    );
-  };
+      break;
+    default:
+      throw new Error('unsupported key: ' + key);
+    }
+  }
+  return array;
+}
+
+function Bench(binding, method, batch, sourceSize, end) {
+  var queue = new Queue(Concurrency);
+  var start = process.hrtime();
+  var latencies = 0;
+  if (binding === 'sync @ronomon') {
+    queue.onData = function(args, end) {
+      var hrtime = process.hrtime();
+      Binding[binding][method].apply(Binding[binding], args);
+      var elapsed = process.hrtime(hrtime);
+      latencies += (elapsed[0] * 1e9) + elapsed[1];
+      end();
+    };
+  } else {
+    queue.onData = function(args, end) {
+      var hrtime = process.hrtime();
+      Binding[binding][method].call(Binding[binding], ...args,
+        function(error) {
+          if (error) return end(error);
+          var elapsed = process.hrtime(hrtime);
+          latencies += (elapsed[0] * 1e9) + elapsed[1];
+          end();
+        }
+      );
+    };
+  }
   queue.onEnd = function(error) {
     if (error) return end(error);
-    var elapsed = Date.now() - now;
-    var latency = (time / count) / 1000000;
-    var throughput = sum / elapsed / 1000;
-    display([
-      name + ':',
+    var elapsed = process.hrtime(start);
+    var seconds = ((elapsed[0] * 1e9) + elapsed[1]) / 1000000 / 1000;
+    var latency = latencies / batch.length / 1000000;
+    var throughput = batch.length * sourceSize / 1000000 / (seconds || 1);
+    Print([
+      binding + ':',
       'Latency:',
       latency.toFixed(3) + 'ms',
       'Throughput:',
       throughput.toFixed(2) + ' MB/s'
     ]);
-    // Rest between benchmarks to leave room for GC:
+    // Leave room for GC:
     setTimeout(end, 100);
   };
-  queue.concat(vectors);
+  queue.concat(batch);
   queue.end();
 }
 
-function display(columns) {
-  var string = columns[0];
-  while (string.length < 15) string = ' ' + string;
-  string += ' ' + columns.slice(1).join(' ');
-  console.log(string);
+function Print(columns) {
+  console.log(columns[0].padStart(20, ' ') + ' ' + columns.slice(1).join(' '));
+}
+
+var Slab = Buffer.alloc(160 * 1024 * 1024, 255);
+var SlabOffset = 0;
+
+function Slice(size, array) {
+  if (SlabOffset + size > Slab.length) return false;
+  array.push(Slab.slice(SlabOffset, SlabOffset += size));
+  return true;
 }
 
 console.log('');
-display([ 'CPU:', cpu ]);
-display([ 'Cores:', cores ]);
-display([ 'Threads:', concurrency ]);
+Print([ 'CPU:', require('os').cpus()[0].model ]);
+Print([ 'Cores:', Cores ]);
+Print([ 'Threads:', Concurrency ]);
 
 var queue = new Queue();
-queue.onData = function(type, end) {
-  console.log('');
-  console.log('============================================================');
+queue.onData = function(method, end) {
   var queue = new Queue();
-  queue.onData = function(sourceSize, end) {
-    var vectors = [];
-    var length = Math.min(10000, Math.round(ram / 4 / sourceSize));
+  queue.onData = function(algorithm, end) {
     console.log('');
-    if (type === 'Cipher') {
-      var algorithm = Algorithms[type][0].name;
-    } else {
-      var algorithm = type.toUpperCase() + '-' + Algorithms[type][0].name;
-    }
-    display([
-      algorithm + ':',
-      length + ' x ' + sourceSize + ' Bytes'
-    ]);
-    while (length--) {
-      vectors.push(new common.Vector[type](
-        Algorithms[type],
-        undefined,
-        sourceSize
-      ));
-    }
+    console.log(new Array(72 + 1).join('='));
     var queue = new Queue();
-    queue.onData = function(name, end) {
-      benchmark(type, vectors, name, binding[name], end);
+    queue.onData = function(sourceSize, end) {
+      SlabOffset = 0;
+      var batch = [];
+      var length = 16384;
+      while (length--) {
+        var args = Args(method, algorithm, sourceSize);
+        if (args) {
+          batch.push(args);
+        } else {
+          break;
+        }
+      }
+      batch = batch.slice(0, Math.pow(2, Math.floor(Math.log2(batch.length))));
+      console.log('');
+      Print([
+        (method === 'hmac' ? 'hmac-' : '') + algorithm.name + ':',
+        batch.length + ' x ' + sourceSize + ' Bytes'
+      ]);
+      var queue = new Queue();
+      queue.onData = function(binding, end) {
+        Bench(binding, method, batch, sourceSize, end);
+      };
+      queue.onEnd = end;
+      queue.push('node');
+      queue.push('sync @ronomon');
+      queue.push('async @ronomon');
+      queue.end();
     };
     queue.onEnd = end;
-    queue.push('crypto');
-    queue.push('crypto-async');
+    queue.push(256);
+    queue.push(1024);
+    queue.push(4096);
+    queue.push(65536);
+    queue.push(1048576);
     queue.end();
   };
   queue.onEnd = end;
-  queue.push(256);
-  queue.push(1024);
-  queue.push(4096);
-  queue.push(65536);
-  queue.push(1048576);
+  queue.concat(Common[method].algorithm.filter(
+    function(algorithm) {
+      if (/^(md5|sha1)$/i.test(algorithm.name)) return false;
+      if (/-(128|192)-/i.test(algorithm.name)) return false;
+      return true;
+    }
+  ));
   queue.end();
 };
 queue.onEnd = function(error) {
   if (error) throw error;
   console.log('');
 };
-queue.push('Cipher');
-queue.push('Hash');
-queue.push('HMAC');
+queue.push('cipher');
+queue.push('hash');
+queue.push('hmac');
 queue.end();
