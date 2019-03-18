@@ -325,28 +325,26 @@ function Probe(method, signature, algorithm) {
           // (offset + size > length)
           maxOffset + maxSize + 1
         ]);
-        if (method === 'cipher' && key === 'keySize') {
-          check('E_KEY_INVALID', [0, algorithm.keySize - 1]);
-        }
-        if (key === 'ivSize') {
-          check('E_IV_INVALID', [0]);
-          if (algorithm.tagSize === 0) {
-            check('E_IV_INVALID', [algorithm.ivSize - 1]);
+        if (method === 'cipher') {
+          if (key === 'keySize') {
+            check('E_KEY_INVALID', [0, algorithm.keySize - 1]);
+          }
+          if (key === 'ivSize') {
+            check('E_IV_INVALID', [0, algorithm.ivSize - 1]);
+          }
+          if (key === 'aadSize') {
+            if (algorithm.tagSize === 0) {
+              check('E_AAD_INVALID', [2]);
+            }
+          }
+          if (key === 'tagSize') {
+            if (algorithm.tagSize) {
+              check('E_TAG_INVALID', [0]);
+            } else {
+              check('E_TAG_INVALID', [1]);
+            }
           }
         }
-        if (key === 'aadSize') {
-          if (algorithm.tagSize === 0) {
-            check('E_AAD_INVALID', [2]);
-          }
-        }
-        if (key === 'tagSize') {
-          if (algorithm.tagSize) {
-            check('E_TAG_INVALID', [0]);
-          } else {
-            check('E_TAG_INVALID', [1]);
-          }
-        }
-        return;
       }
     }
   );

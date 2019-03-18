@@ -71,16 +71,6 @@ const Cipher = {
     var encrypt = 1;
     var keySize = algorithm.keySize;
     var ivSize = algorithm.ivSize;
-    if (aead) {
-      ivSize = Math.ceil(random() * algorithm.ivSize);
-      // For ChaCha20-Poly1305, GCM and OCB, all with 12-byte IVs, this can
-      // test the upper limit of 16-bytes, 16-bytes and 15-bytes respectively:
-      // We disabled this test when it discovered the ChaCha20-Poly1305 CVE.
-      // Our binding now prohibits more than 96-bits for any of these ciphers.
-      // if (algorithm.ivSize === 12 && random() < 0.5) {
-      //   ivSize += (/-ocb$/i.test(algorithm.name) ? 3 : 4);
-      // }
-    }
     var sourceSize = randomSize();
     var targetSize = sourceSize + CIPHER_BLOCK_MAX;
     var aadSize = 0;

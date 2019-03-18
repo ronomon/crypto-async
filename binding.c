@@ -208,26 +208,21 @@ static int cipher_valid_iv_size(
 ) {
   assert(evp_cipher);
   assert(iv_size >= 0);
-  if (!cipher_aead(evp_cipher)) {
-    if (iv_size != EVP_CIPHER_iv_length(evp_cipher)) return 0;
-    return 1;
-  }
-  if (EVP_CIPHER_nid(evp_cipher) == NID_chacha20_poly1305) {
-    // "The maximum nonce length is 16 (CHACHA_CTR_SIZE, i.e. 128-bits)."
-    // N.B. However, see: https://github.com/openssl/openssl/issues/8345
-    // We therefore allow at most 12 bytes:
-    if (iv_size < 1 || iv_size > 12) return 0;
-    return 1;
-  }
-  const int mode = EVP_CIPHER_mode(evp_cipher);
-  if (mode == EVP_CIPH_GCM_MODE || mode == EVP_CIPH_OCB_MODE) {
-    // "For OCB mode the maximum is 15."
-    // See comment above regarding ChaCha20-Poly1305 vulnerability:
-    if (iv_size < 1 || iv_size > 12) return 0;
-    return 1;
-  }
-  // Defer validation to OpenSSL.
-  return 1;
+  // OpenSSL allows variable length IVs for AEAD ciphers:
+  // "The maximum nonce length is 16 (CHACHA_CTR_SIZE, i.e. 128-bits)."
+  // "For OCB mode the maximum is 15."
+  //
+  // However, OpenSSL had CVE-2019-1543 because of this for ChaCha20-Poly1305:
+  // https://www.openssl.org/news/secadv/20190306.txt
+  // https://github.com/openssl/openssl/issues/8345
+  //
+  // Allowing variable length IVs also opens the door for further nonce reuse:
+  // https://github.com/openssl/openssl/pull/8406#issuecomment-470615087
+  //
+  // We therefore require all IVs to be the default length.
+  // Anything else is a recipe for disaster.
+  if (iv_size == EVP_CIPHER_iv_length(evp_cipher)) return 1;
+  return 0;
 }
 
 static int cipher_valid_key_size(
@@ -236,9 +231,8 @@ static int cipher_valid_key_size(
 ) {
   assert(evp_cipher);
   assert(key_size >= 0);
-  if (key_size != EVP_CIPHER_key_length(evp_cipher)) return 0;
-  // Defer validation to OpenSSL.
-  return 1;
+  if (key_size == EVP_CIPHER_key_length(evp_cipher)) return 1;
+  return 0;
 }
 
 static int cipher_valid_tag_size(
@@ -371,33 +365,9 @@ static const char* execute_cipher(
     }
   }
 
-  // Set the key length (some ciphers have a variable key length):
-  // "EVP_CIPHER_CTX_set_key_length() sets the key length of the cipher ctx. If
-  // the cipher is a fixed length cipher then attempting to set the key length
-  // to any value other than the fixed value is an error."
-  if (!EVP_CIPHER_CTX_set_key_length(ctx, key_size)) {
-    EVP_CIPHER_CTX_free(ctx);
-    return "keySize invalid";
-  }
-
-  // Set the IV length:
-  if (aead) {
-    // GCM and OCB:
-    // "Sets the IV length. This call can only be made before specifying an IV.
-    // If not called a default IV length is used.
-    //
-    // For GCM AES and OCB AES the default is 12 (i.e. 96 bits). For OCB mode
-    // the maximum is 15."
-
-    // ChaCha20-Poly1305:
-    // "Sets the nonce length. This call can only be made before specifying the
-    // nonce. If not called a default nonce length of 12 (i.e. 96 bits) is used.
-    // The maximum nonce length is 16 (CHACHA_CTR_SIZE, i.e. 128-bits)."
-    if (!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_IVLEN, iv_size, NULL)) {
-      EVP_CIPHER_CTX_free(ctx);
-      return "ivSize invalid";
-    }
-  }
+  // Assert key and IV length:
+  assert(key_size == EVP_CIPHER_key_length(evp_cipher));
+  assert(iv_size == EVP_CIPHER_iv_length(evp_cipher));
 
   // Set the key and IV:
   // "The operation performed depends on the value of the enc parameter. It
