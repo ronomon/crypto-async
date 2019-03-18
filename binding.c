@@ -77,7 +77,7 @@ static int arg_buf(
   }
   size_t size = 0;
   OK(napi_get_buffer_info(env, value, (void**) buffer, &size));
-  assert(buffer != NULL);
+  assert(*buffer != NULL);
   if (size > INT_MAX) {
     napi_throw_error(env, NULL, E_BUFFER_LENGTH);
     return 0;
