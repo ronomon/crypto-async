@@ -1,6 +1,6 @@
 {
   "name": "@ronomon/crypto-async",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "description": "Fast, reliable cipher, hash and hmac methods executed in Node's threadpool for multi-core throughput.",
   "main": "index.js",
   "files": [
