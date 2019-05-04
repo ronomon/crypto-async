@@ -474,6 +474,24 @@ cryptoAsync.hmac(
 );
 ```
 
+#### Sign
+```javascript
+var cryptoAsync = require('@ronomon/crypto-async');
+var algorithm = 'RSA-sha256';
+var key = Buffer.alloc(1024);
+var source = Buffer.alloc(1024 * 1024);
+var target = Buffer.alloc(1024 * 1024);
+cryptoAsync.sign(
+  algorithm,
+  key,
+  source,
+  function(error, signature) {
+    if (error) throw error;
+    console.log('signature:', signature.toString('base64'));
+  }
+);
+```
+
 ## Tests
 `@ronomon/crypto-async` ships with comprehensive fuzz tests, which have
 uncovered multiple bugs in OpenSSL:

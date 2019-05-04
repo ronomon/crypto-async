@@ -4,6 +4,8 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
+#include <openssl/pem.h>
+#include <openssl/rsa.h>
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -50,6 +52,7 @@
 #define FLAG_CIPHER 1
 #define FLAG_HASH 2
 #define FLAG_HMAC 4
+#define FLAG_SIGN 8
 
 #define OK(call)                                                               \
   assert((call) == napi_ok);
@@ -514,6 +517,44 @@ static const char* execute_hmac(
   return NULL;
 }
 
+static const char* execute_sign(
+  const unsigned char* key,
+  const int key_size,
+  const unsigned char* source,
+  const int source_size,
+  unsigned char* target,
+  int* target_size
+) {
+  RSA *rsa = NULL;
+  BIO *keybio = BIO_new_mem_buf((void*)key, key_size);
+  if (keybio == NULL) {
+    return "key buffer allocation failed";
+  }
+  rsa = PEM_read_bio_RSAPrivateKey(keybio, &rsa, NULL, NULL);
+  if (rsa == NULL) {
+    return "invalid private key";
+  }
+  EVP_MD_CTX* m_RSASignCtx = EVP_MD_CTX_create();
+  EVP_PKEY* priKey = EVP_PKEY_new();
+  EVP_PKEY_assign_RSA(priKey, rsa);
+  if (EVP_DigestSignInit(m_RSASignCtx, NULL, EVP_sha256(), NULL, priKey) <= 0) {
+    EVP_MD_CTX_free(m_RSASignCtx);
+    return "initialization failed";
+  }
+  if (EVP_DigestSignUpdate(m_RSASignCtx, source, source_size) <= 0) {
+    EVP_MD_CTX_free(m_RSASignCtx);
+    return "update failed";
+  }
+  size_t final_size = *target_size;
+  if (EVP_DigestSignFinal(m_RSASignCtx, target, &final_size) <= 0) {
+    EVP_MD_CTX_free(m_RSASignCtx);
+    return "finalization failed";
+  }
+  EVP_MD_CTX_free(m_RSASignCtx);
+  *target_size = final_size;
+  return NULL;
+}
+
 static int range(
   napi_env env,
   const int offset,
@@ -600,6 +641,15 @@ void task_execute(napi_env env, void* data) {
       task->source,
       task->source_size,
       task->target
+    );
+  } else if (task->flags & FLAG_SIGN) {
+    task->error = execute_sign(
+      task->key,
+      task->key_size,
+      task->source,
+      task->source_size,
+      task->target,
+      &task->target_size
     );
   } else {
     printf("unrecognized task->flags=%i\n", task->flags);
@@ -1025,6 +1075,78 @@ static napi_value hmac(napi_env env, napi_callback_info info) {
   );
 }
 
+static napi_value sign(napi_env env, napi_callback_info info) {
+  size_t argc = 9;
+  napi_value argv[9];
+  OK(napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
+  if (argc != 8 && argc != 9) THROW(env, E_ARGUMENTS);
+  char algorithm[32];
+  unsigned char* key = NULL;
+  unsigned char* source = NULL;
+  unsigned char* target = NULL;
+  int source_length = 0;
+  int target_length = 0;
+  int source_size = 0;
+  int target_size = 512; // How do we determine this?
+  int key_size = 0;
+  int key_length = 0;
+  if (
+      !arg_buf(env, argv[1], &key, &key_length, E_KEY) ||
+      !arg_int(env, argv[3], &key_size, E_KEY_SIZE) ||
+      !arg_buf(env, argv[4], &source, &source_length, E_SOURCE) ||
+      !arg_int(env, argv[6], &source_size, E_SOURCE_SIZE) ||
+      !arg_buf(env, argv[7], &target, &target_length, E_TARGET)
+    ) {
+      return NULL;
+    }
+    if (
+      !range(env, 0, key_size, key_length, E_KEY_RANGE) ||
+      !range(env, 0, source_size, source_length, E_SOURCE_RANGE)
+    ) {
+      return NULL;
+    }
+  if (!arg_str(env, argv[0], algorithm, 32, E_ALGORITHM)) return NULL;
+  if (argc == 8) {
+    const char* error = execute_sign(
+      key,
+      key_size,
+      source,
+      source_size,
+      target,
+      &target_size
+    );
+    if (error) THROW(env, error);
+    napi_value result;
+    OK(napi_create_int64(env, target_size, &result));
+    return result;
+  }
+  return task_create(
+    env,            // env
+    FLAG_SIGN,      // flags
+    0,              // nid
+    0,              // encrypt
+    key,            // key
+    NULL,           // iv
+    source,         // source
+    target,         // target
+    NULL,           // aad
+    NULL,           // tag
+    key_size,       // key_size
+    0,              // iv_size
+    source_size,    // source_size
+    target_size,    // target_size
+    0,              // aad_size
+    0,              // tag_size
+    argv[1],        // ref_key
+    NULL,           // ref_iv
+    argv[4],        // ref_source
+    argv[7],        // ref_target
+    NULL,           // ref_aad
+    NULL,           // ref_tag
+    argv[8]         // ref_callback
+  );
+}
+
 void export_error(
   napi_env env,
   napi_value exports,
@@ -1052,6 +1174,9 @@ static napi_value Init(napi_env env, napi_value exports) {
   napi_value fn_hmac;
   OK(napi_create_function(env, NULL, 0, hmac, NULL, &fn_hmac));
   OK(napi_set_named_property(env, exports, "hmac", fn_hmac));
+  napi_value fn_sign;
+  OK(napi_create_function(env, NULL, 0, sign, NULL, &fn_sign));
+  OK(napi_set_named_property(env, exports, "sign", fn_sign));
   napi_value evp_max_block;
   OK(napi_create_int64(env, (int64_t) EVP_MAX_BLOCK_LENGTH, &evp_max_block));
   OK(napi_set_named_property(env, exports, "CIPHER_BLOCK_MAX", evp_max_block));

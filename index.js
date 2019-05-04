@@ -13,7 +13,7 @@ if (!Number.isInteger(binding.CIPHER_BLOCK_MAX)) {
 for (var key in binding) {
   if (/^[A-Z_]+$/.test(key)) {
     module.exports[key] = binding[key];
-  } else if (!/^(cipher|hash|hmac)$/.test(key)) {
+  } else if (!/^(cipher|hash|hmac|sign)$/.test(key)) {
     throw new Error('non-whitelisted binding property: ' + key);
   }
 }
@@ -149,6 +149,46 @@ module.exports.hmac = function(...args) {
       source.length,
       target,
       0,
+      function(error, targetSize) {
+        if (error) return end(error);
+        end(undefined, target.slice(0, targetSize));
+      }
+    );
+  }
+};
+
+module.exports.sign = function(...args) {
+  if (args.length === 6 || args.length === 7) return binding.sign(...args);
+  if (args.length < 3 || args.length > 4) throw new Error(binding.E_ARGUMENTS);
+  var algorithm = args[0];
+  var key = args[1];
+  var source = args[2];
+  if (!Buffer.isBuffer(key)) throw new Error(binding.E_KEY);
+  if (!Buffer.isBuffer(source)) throw new Error(binding.E_SOURCE);
+  var target = Buffer.alloc(512); // Support up to 512 bytes - a 4096 bit key.
+  if (args.length === 3) {
+    return target.slice(0, binding.sign(
+      algorithm,
+      key,
+      0,
+      key.length,
+      source,
+      0,
+      source.length,
+      target
+    ));
+  } else {
+    var end = args[args.length - 1];
+    if (typeof end !== 'function') throw new Error(binding.E_CALLBACK);
+    return binding.sign(
+      algorithm,
+      key,
+      0,
+      key.length,
+      source,
+      0,
+      source.length,
+      target,
       function(error, targetSize) {
         if (error) return end(error);
         end(undefined, target.slice(0, targetSize));
