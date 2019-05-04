@@ -175,7 +175,8 @@ module.exports.sign = function(...args) {
       source,
       0,
       source.length,
-      target
+      target,
+      0
     ));
   } else {
     var end = args[args.length - 1];
@@ -189,6 +190,7 @@ module.exports.sign = function(...args) {
       0,
       source.length,
       target,
+      0,
       function(error, targetSize) {
         if (error) return end(error);
         end(undefined, target.slice(0, targetSize));

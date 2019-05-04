@@ -1089,10 +1089,10 @@ static napi_value hmac(napi_env env, napi_callback_info info) {
 }
 
 static napi_value sign(napi_env env, napi_callback_info info) {
-  size_t argc = 9;
-  napi_value argv[9];
+  size_t argc = 10;
+  napi_value argv[10];
   OK(napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
-  if (argc != 8 && argc != 9) THROW(env, E_ARGUMENTS);
+  if (argc != 9 && argc != 10) THROW(env, E_ARGUMENTS);
   char algorithm[32];
   unsigned char* key = NULL;
   unsigned char* source = NULL;
@@ -1100,31 +1100,37 @@ static napi_value sign(napi_env env, napi_callback_info info) {
   int source_length = 0;
   int target_length = 0;
   int source_size = 0;
-  int target_size = 512; // How do we determine this?
+  int target_size = 0;
   int key_size = 0;
   int key_length = 0;
+  int key_offset = 0;
+  int source_offset = 0;
+  int target_offset = 0;
   if (
-      !arg_buf(env, argv[1], &key, &key_length, E_KEY) ||
-      !arg_int(env, argv[3], &key_size, E_KEY_SIZE) ||
-      !arg_buf(env, argv[4], &source, &source_length, E_SOURCE) ||
-      !arg_int(env, argv[6], &source_size, E_SOURCE_SIZE) ||
-      !arg_buf(env, argv[7], &target, &target_length, E_TARGET)
-    ) {
-      return NULL;
-    }
-    if (
-      !range(env, 0, key_size, key_length, E_KEY_RANGE) ||
-      !range(env, 0, source_size, source_length, E_SOURCE_RANGE)
-    ) {
-      return NULL;
-    }
+    !arg_buf(env, argv[1], &key, &key_length, E_KEY) ||
+    !arg_int(env, argv[2], &key_offset, E_KEY_OFFSET) ||
+    !arg_int(env, argv[3], &key_size, E_KEY_SIZE) ||
+    !arg_buf(env, argv[4], &source, &source_length, E_SOURCE) ||
+    !arg_int(env, argv[5], &source_offset, E_SOURCE_OFFSET) ||
+    !arg_int(env, argv[6], &source_size, E_SOURCE_SIZE) ||
+    !arg_buf(env, argv[7], &target, &target_length, E_TARGET) ||
+    !arg_int(env, argv[8], &target_offset, E_TARGET_OFFSET) ||
+    !range(env, key_offset, key_size, key_length, E_KEY_RANGE) ||
+    !range(env, source_offset, source_size, source_length, E_SOURCE_RANGE) ||
+    !range(env, target_offset, target_size, target_length, E_TARGET_RANGE)
+  ) {
+    return NULL;
+  }
+  key += key_offset;
+  source += source_offset;
+  target += target_offset;
   if (!arg_str(env, argv[0], algorithm, 32, E_ALGORITHM)) return NULL;
   const EVP_MD* evp_md = EVP_get_digestbyname(algorithm);
   if (!evp_md) THROW(env, E_ALGORITHM_UNKNOWN);
   int nid = EVP_MD_type(evp_md);
   assert(nid != NID_undef);
   target_size = EVP_MD_size(evp_md) * 8;
-  if (argc == 8) {
+  if (argc == 9) {
     const char* error = execute_sign(
       nid,
       key,
@@ -1162,7 +1168,7 @@ static napi_value sign(napi_env env, napi_callback_info info) {
     argv[7],        // ref_target
     NULL,           // ref_aad
     NULL,           // ref_tag
-    argv[8]         // ref_callback
+    argv[9]         // ref_callback
   );
 }
 
