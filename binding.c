@@ -531,6 +531,7 @@ static const char* execute_sign(
     return "key buffer allocation failed";
   }
   rsa = PEM_read_bio_RSAPrivateKey(keybio, &rsa, NULL, NULL);
+  BIO_free(keybio);
   if (rsa == NULL) {
     return "invalid private key";
   }
@@ -540,25 +541,21 @@ static const char* execute_sign(
   if (EVP_DigestSignInit(m_RSASignCtx, NULL, EVP_sha256(), NULL, priKey) <= 0) {
     EVP_MD_CTX_free(m_RSASignCtx);
     RSA_free(rsa);
-    BIO_free(keybio);
     return "initialization failed";
   }
   if (EVP_DigestSignUpdate(m_RSASignCtx, source, source_size) <= 0) {
     EVP_MD_CTX_free(m_RSASignCtx);
     RSA_free(rsa);
-    BIO_free(keybio);
     return "update failed";
   }
   size_t final_size = *target_size;
   if (EVP_DigestSignFinal(m_RSASignCtx, target, &final_size) <= 0) {
     EVP_MD_CTX_free(m_RSASignCtx);
     RSA_free(rsa);
-    BIO_free(keybio);
     return "finalization failed";
   }
   EVP_MD_CTX_free(m_RSASignCtx);
   RSA_free(rsa);
-  BIO_free(keybio);
   *target_size = final_size;
   return NULL;
 }
