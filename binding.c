@@ -539,18 +539,26 @@ static const char* execute_sign(
   EVP_PKEY_assign_RSA(priKey, rsa);
   if (EVP_DigestSignInit(m_RSASignCtx, NULL, EVP_sha256(), NULL, priKey) <= 0) {
     EVP_MD_CTX_free(m_RSASignCtx);
+    RSA_free(rsa);
+    BIO_free(keybio);
     return "initialization failed";
   }
   if (EVP_DigestSignUpdate(m_RSASignCtx, source, source_size) <= 0) {
     EVP_MD_CTX_free(m_RSASignCtx);
+    RSA_free(rsa);
+    BIO_free(keybio);
     return "update failed";
   }
   size_t final_size = *target_size;
   if (EVP_DigestSignFinal(m_RSASignCtx, target, &final_size) <= 0) {
     EVP_MD_CTX_free(m_RSASignCtx);
+    RSA_free(rsa);
+    BIO_free(keybio);
     return "finalization failed";
   }
   EVP_MD_CTX_free(m_RSASignCtx);
+  RSA_free(rsa);
+  BIO_free(keybio);
   *target_size = final_size;
   return NULL;
 }
