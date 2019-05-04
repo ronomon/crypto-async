@@ -518,6 +518,7 @@ static const char* execute_hmac(
 }
 
 static const char* execute_sign(
+  const int nid,
   const unsigned char* key,
   const int key_size,
   const unsigned char* source,
@@ -538,7 +539,13 @@ static const char* execute_sign(
   EVP_MD_CTX* m_RSASignCtx = EVP_MD_CTX_create();
   EVP_PKEY* priKey = EVP_PKEY_new();
   EVP_PKEY_assign_RSA(priKey, rsa);
-  if (EVP_DigestSignInit(m_RSASignCtx, NULL, EVP_sha256(), NULL, priKey) <= 0) {
+  const EVP_MD* evp_md = EVP_get_digestbynid(nid);
+  if (!evp_md) {
+    EVP_MD_CTX_free(m_RSASignCtx);
+    RSA_free(rsa);
+    return "nid invalid";
+  }
+  if (EVP_DigestSignInit(m_RSASignCtx, NULL, evp_md, NULL, priKey) <= 0) {
     EVP_MD_CTX_free(m_RSASignCtx);
     RSA_free(rsa);
     return "initialization failed";
@@ -649,6 +656,7 @@ void task_execute(napi_env env, void* data) {
     );
   } else if (task->flags & FLAG_SIGN) {
     task->error = execute_sign(
+      task->nid,
       task->key,
       task->key_size,
       task->source,
@@ -1111,8 +1119,14 @@ static napi_value sign(napi_env env, napi_callback_info info) {
       return NULL;
     }
   if (!arg_str(env, argv[0], algorithm, 32, E_ALGORITHM)) return NULL;
+  const EVP_MD* evp_md = EVP_get_digestbyname(algorithm);
+  if (!evp_md) THROW(env, E_ALGORITHM_UNKNOWN);
+  int nid = EVP_MD_type(evp_md);
+  assert(nid != NID_undef);
+  target_size = EVP_MD_size(evp_md) * 8;
   if (argc == 8) {
     const char* error = execute_sign(
+      nid,
       key,
       key_size,
       source,
@@ -1128,7 +1142,7 @@ static napi_value sign(napi_env env, napi_callback_info info) {
   return task_create(
     env,            // env
     FLAG_SIGN,      // flags
-    0,              // nid
+    nid,            // nid
     0,              // encrypt
     key,            // key
     NULL,           // iv
