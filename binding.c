@@ -1120,11 +1120,11 @@ static napi_value key(napi_env env, napi_callback_info info) {
   EVP_PKEY *pkey = PEM_read_bio_PrivateKey(keybio, NULL, NULL, NULL);
   if (pkey == NULL) {
     BIO_free(keybio);
+    keybio = BIO_new_mem_buf(key, key_length);
     if (keybio == NULL) {
       THROW(env, "key buffer allocation failed");
       return NULL;
     }
-    keybio = BIO_new_mem_buf(key, key_length);
     pkey = PEM_read_bio_PUBKEY(keybio, NULL, NULL, NULL);
   }
   BIO_free(keybio);
