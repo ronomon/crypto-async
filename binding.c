@@ -31,11 +31,13 @@
 #define E_IV_RANGE "ivOffset + ivSize > iv.length"
 #define E_IV_SIZE "ivSize must be an unsigned integer"
 #define E_KEY "key must be a buffer"
+#define E_KEY_EXTERNAL "key must be created using the key(buffer) method"
 #define E_KEY_INVALID "keySize invalid"
 #define E_KEY_OFFSET "keyOffset must be an unsigned integer"
 #define E_KEY_RANGE "keyOffset + keySize > key.length"
 #define E_KEY_SIZE "keySize must be an unsigned integer"
 #define E_OOM "out of memory"
+#define E_SIGN "sign must be 0 or 1"
 #define E_SOURCE "source must be a buffer"
 #define E_SOURCE_OFFSET "sourceOffset must be an unsigned integer"
 #define E_SOURCE_RANGE "sourceOffset + sourceSize > source.length"
@@ -52,7 +54,7 @@
 #define FLAG_CIPHER 1
 #define FLAG_HASH 2
 #define FLAG_HMAC 4
-#define FLAG_SIGN 8
+#define FLAG_SIGNATURE 8
 
 #define OK(call)                                                               \
   assert((call) == napi_ok);
@@ -517,53 +519,54 @@ static const char* execute_hmac(
   return NULL;
 }
 
-static const char* execute_sign(
+static const char* execute_signature(
   const int nid,
-  const unsigned char* key,
-  const int key_size,
+  const int sign,
+  EVP_PKEY* key,
   const unsigned char* source,
   const int source_size,
   unsigned char* target,
   int* target_size
 ) {
-  RSA *rsa = NULL;
-  BIO *keybio = BIO_new_mem_buf((void*)key, key_size);
-  if (keybio == NULL) {
-    return "key buffer allocation failed";
-  }
-  rsa = PEM_read_bio_RSAPrivateKey(keybio, &rsa, NULL, NULL);
-  BIO_free(keybio);
-  if (rsa == NULL) {
-    return "invalid private key";
-  }
-  EVP_MD_CTX* m_RSASignCtx = EVP_MD_CTX_create();
-  EVP_PKEY* priKey = EVP_PKEY_new();
-  EVP_PKEY_assign_RSA(priKey, rsa);
   const EVP_MD* evp_md = EVP_get_digestbynid(nid);
   if (!evp_md) {
-    EVP_MD_CTX_free(m_RSASignCtx);
-    RSA_free(rsa);
     return "nid invalid";
   }
-  if (EVP_DigestSignInit(m_RSASignCtx, NULL, evp_md, NULL, priKey) <= 0) {
-    EVP_MD_CTX_free(m_RSASignCtx);
-    RSA_free(rsa);
-    return "initialization failed";
+  EVP_MD_CTX* ctx = EVP_MD_CTX_create();
+  if (sign == 1) {
+    if (EVP_DigestSignInit(ctx, NULL, evp_md, NULL, key) <= 0) {
+      EVP_MD_CTX_free(ctx);
+      return "initialization failed";
+    }
+    if (EVP_DigestSignUpdate(ctx, source, source_size) <= 0) {
+      EVP_MD_CTX_free(ctx);
+      return "update failed";
+    }
+    size_t final_size = *target_size;
+    if (EVP_DigestSignFinal(ctx, target, &final_size) <= 0) {
+      EVP_MD_CTX_free(ctx);
+      return "finalization failed";
+    }
+    EVP_MD_CTX_free(ctx);
+    *target_size = final_size;
+  } else {
+    if (EVP_DigestVerifyInit(ctx, NULL, evp_md, NULL, key) <= 0) {
+      EVP_MD_CTX_free(ctx);
+      return "initialization failed";
+    }
+    if (EVP_DigestVerifyUpdate(ctx, source, source_size) <= 0) {
+      EVP_MD_CTX_free(ctx);
+      return "update failed";
+    }
+    size_t final_size = *target_size;
+    int verification_status = EVP_DigestVerifyFinal(ctx, target, final_size);
+    if (verification_status == 1) {
+      EVP_MD_CTX_free(ctx);
+    } else {
+      *target_size = 0;
+      EVP_MD_CTX_free(ctx);
+    }
   }
-  if (EVP_DigestSignUpdate(m_RSASignCtx, source, source_size) <= 0) {
-    EVP_MD_CTX_free(m_RSASignCtx);
-    RSA_free(rsa);
-    return "update failed";
-  }
-  size_t final_size = *target_size;
-  if (EVP_DigestSignFinal(m_RSASignCtx, target, &final_size) <= 0) {
-    EVP_MD_CTX_free(m_RSASignCtx);
-    RSA_free(rsa);
-    return "finalization failed";
-  }
-  EVP_MD_CTX_free(m_RSASignCtx);
-  RSA_free(rsa);
-  *target_size = final_size;
   return NULL;
 }
 
@@ -654,11 +657,23 @@ void task_execute(napi_env env, void* data) {
       task->source_size,
       task->target
     );
-  } else if (task->flags & FLAG_SIGN) {
-    task->error = execute_sign(
+  } else if (task->flags & FLAG_SIGNATURE) {
+    napi_value key_external;
+    if (napi_get_reference_value(env, task->ref_key, &key_external) != napi_ok) {
+      printf("invalid private key");
+      abort();
+      return;
+    }
+    void *key;
+    if (napi_get_value_external(env, key_external, &key)) {
+      printf("invalid private key");
+      abort();
+      return;
+    }
+    task->error = execute_signature(
       task->nid,
-      task->key,
-      task->key_size,
+      task->encrypt,
+      (EVP_PKEY*) key,
       task->source,
       task->source_size,
       task->target,
@@ -1088,53 +1103,103 @@ static napi_value hmac(napi_env env, napi_callback_info info) {
   );
 }
 
-static napi_value sign(napi_env env, napi_callback_info info) {
-  size_t argc = 10;
-  napi_value argv[10];
+static void key_finalize(napi_env env, void* key, void* hint) {
+  EVP_PKEY_free(key);
+  key = hint;
+}
+
+static napi_value key(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value argv[1];
   OK(napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
-  if (argc != 9 && argc != 10) THROW(env, E_ARGUMENTS);
-  char algorithm[32];
+  if (argc != 1) THROW(env, E_ARGUMENTS);
   unsigned char* key = NULL;
-  unsigned char* source = NULL;
-  unsigned char* target = NULL;
-  int source_length = 0;
-  int target_length = 0;
-  int source_size = 0;
-  int target_size = 0;
-  int key_size = 0;
   int key_length = 0;
-  int key_offset = 0;
-  int source_offset = 0;
-  int target_offset = 0;
-  if (
-    !arg_buf(env, argv[1], &key, &key_length, E_KEY) ||
-    !arg_int(env, argv[2], &key_offset, E_KEY_OFFSET) ||
-    !arg_int(env, argv[3], &key_size, E_KEY_SIZE) ||
-    !arg_buf(env, argv[4], &source, &source_length, E_SOURCE) ||
-    !arg_int(env, argv[5], &source_offset, E_SOURCE_OFFSET) ||
-    !arg_int(env, argv[6], &source_size, E_SOURCE_SIZE) ||
-    !arg_buf(env, argv[7], &target, &target_length, E_TARGET) ||
-    !arg_int(env, argv[8], &target_offset, E_TARGET_OFFSET) ||
-    !range(env, key_offset, key_size, key_length, E_KEY_RANGE) ||
-    !range(env, source_offset, source_size, source_length, E_SOURCE_RANGE) ||
-    !range(env, target_offset, target_size, target_length, E_TARGET_RANGE)
-  ) {
+  if (!arg_buf(env, argv[0], &key, &key_length, E_KEY)) {
+    THROW(env, E_ARGUMENTS);
     return NULL;
   }
-  key += key_offset;
-  source += source_offset;
-  target += target_offset;
+  BIO *keybio = BIO_new_mem_buf(key, key_length);
+  if (keybio == NULL) {
+    THROW(env, "key buffer allocation failed");
+    return NULL;
+  }
+  EVP_PKEY *pkey = PEM_read_bio_PrivateKey(keybio, NULL, NULL, NULL);
+  if (pkey == NULL) {
+    BIO_free(keybio);
+    if (keybio == NULL) {
+      THROW(env, "key buffer allocation failed");
+      return NULL;
+    }
+    keybio = BIO_new_mem_buf(key, key_length);
+    pkey = PEM_read_bio_PUBKEY(keybio, NULL, NULL, NULL);
+  }
+  BIO_free(keybio);
+  if (pkey == NULL) {
+    THROW(env, "invalid public/private key");
+    return NULL;
+  }
+  napi_value external_key;
+  OK(napi_create_external(env, pkey, key_finalize, NULL, &external_key));
+  return external_key;
+}
+
+static napi_value signature(napi_env env, napi_callback_info info) {
+  size_t argc = 9;
+  napi_value argv[9];
+  OK(napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
+  if (argc != 8 && argc != 9) THROW(env, E_ARGUMENTS);
+
+  // arguments
+  char algorithm[32];
+  int sign = 0;
+  void* key;
+  unsigned char* source = NULL;
+  int source_offset = 0;
+  int source_size = 0;
+  unsigned char* target = NULL;
+  int target_offset = 0;
+
+  int source_length = 0;
+  int target_length = 0;
+  int target_size = 0;
+
   if (!arg_str(env, argv[0], algorithm, 32, E_ALGORITHM)) return NULL;
   const EVP_MD* evp_md = EVP_get_digestbyname(algorithm);
   if (!evp_md) THROW(env, E_ALGORITHM_UNKNOWN);
+  // We avoid EVP_CIPHER_type() since this returns `NID_undef` for some ciphers:
   int nid = EVP_MD_type(evp_md);
   assert(nid != NID_undef);
-  target_size = EVP_MD_size(evp_md) * 8;
-  if (argc == 9) {
-    const char* error = execute_sign(
+
+  if (!arg_int(env, argv[1], &sign, E_SIGN)) return NULL;
+  if (sign != 0 && sign != 1) THROW(env, E_SIGN);
+
+  if (napi_get_value_external(env, argv[2], &key)) {
+    THROW(env, E_KEY_EXTERNAL);
+    return NULL;
+  }
+
+  if (
+    !arg_buf(env, argv[3], &source, &source_length, E_SOURCE) ||
+    !arg_int(env, argv[4], &source_offset, E_SOURCE_OFFSET) ||
+    !arg_int(env, argv[5], &source_size, E_SOURCE_SIZE) ||
+    !arg_buf(env, argv[6], &target, &target_length, E_TARGET) ||
+    !arg_int(env, argv[7], &target_offset, E_TARGET_OFFSET) ||
+    !range(env, source_offset, source_size, source_length, E_SOURCE_RANGE)
+  ) {
+    return NULL;
+  }
+  EVP_PKEY *pkey = (EVP_PKEY*) key;
+  target_size = EVP_PKEY_size(pkey);
+  if (!range(env, target_offset, target_size, target_length, E_TARGET_RANGE)) return NULL;
+  source += source_offset;
+  target += target_offset;
+
+  if (argc == 8) {
+    const char* error = execute_signature(
       nid,
-      key,
-      key_size,
+      sign,
+      pkey,
       source,
       source_size,
       target,
@@ -1146,29 +1211,29 @@ static napi_value sign(napi_env env, napi_callback_info info) {
     return result;
   }
   return task_create(
-    env,            // env
-    FLAG_SIGN,      // flags
-    nid,            // nid
-    0,              // encrypt
-    key,            // key
-    NULL,           // iv
-    source,         // source
-    target,         // target
-    NULL,           // aad
-    NULL,           // tag
-    key_size,       // key_size
-    0,              // iv_size
-    source_size,    // source_size
-    target_size,    // target_size
-    0,              // aad_size
-    0,              // tag_size
-    argv[1],        // ref_key
-    NULL,           // ref_iv
-    argv[4],        // ref_source
-    argv[7],        // ref_target
-    NULL,           // ref_aad
-    NULL,           // ref_tag
-    argv[9]         // ref_callback
+    env,             // env
+    FLAG_SIGNATURE,  // flags
+    nid,             // nid
+    sign,            // sign
+    NULL,            // key
+    NULL,            // iv
+    source,          // source
+    target,          // target
+    NULL,            // aad
+    NULL,            // tag
+    0,               // key_size
+    0,               // iv_size
+    source_size,     // source_size
+    target_size,     // target_size
+    0,               // aad_size
+    0,               // tag_size
+    argv[2],         // ref_key
+    NULL,            // ref_iv
+    argv[3],         // ref_source
+    argv[6],         // ref_target
+    NULL,            // ref_aad
+    NULL,            // ref_tag
+    argv[8]          // ref_callback
   );
 }
 
@@ -1199,9 +1264,12 @@ static napi_value Init(napi_env env, napi_value exports) {
   napi_value fn_hmac;
   OK(napi_create_function(env, NULL, 0, hmac, NULL, &fn_hmac));
   OK(napi_set_named_property(env, exports, "hmac", fn_hmac));
-  napi_value fn_sign;
-  OK(napi_create_function(env, NULL, 0, sign, NULL, &fn_sign));
-  OK(napi_set_named_property(env, exports, "sign", fn_sign));
+  napi_value fn_key;
+  OK(napi_create_function(env, NULL, 0, key, NULL, &fn_key));
+  OK(napi_set_named_property(env, exports, "key", fn_key));
+  napi_value fn_signature;
+  OK(napi_create_function(env, NULL, 0, signature, NULL, &fn_signature));
+  OK(napi_set_named_property(env, exports, "signature", fn_signature));
   napi_value evp_max_block;
   OK(napi_create_int64(env, (int64_t) EVP_MAX_BLOCK_LENGTH, &evp_max_block));
   OK(napi_set_named_property(env, exports, "CIPHER_BLOCK_MAX", evp_max_block));
@@ -1226,6 +1294,7 @@ static napi_value Init(napi_env env, napi_value exports) {
   export_error(env, exports, "E_IV_RANGE", E_IV_RANGE);
   export_error(env, exports, "E_IV_SIZE", E_IV_SIZE);
   export_error(env, exports, "E_KEY", E_KEY);
+  export_error(env, exports, "E_KEY_EXTERNAL", E_KEY_EXTERNAL);
   export_error(env, exports, "E_KEY_INVALID", E_KEY_INVALID);
   export_error(env, exports, "E_KEY_OFFSET", E_KEY_OFFSET);
   export_error(env, exports, "E_KEY_RANGE", E_KEY_RANGE);
@@ -1243,6 +1312,7 @@ static napi_value Init(napi_env env, napi_value exports) {
   export_error(env, exports, "E_TARGET", E_TARGET);
   export_error(env, exports, "E_TARGET_OFFSET", E_TARGET_OFFSET);
   export_error(env, exports, "E_TARGET_RANGE", E_TARGET_RANGE);
+  export_error(env, exports, "E_SIGN", E_SIGN);
   return exports;
 }
 

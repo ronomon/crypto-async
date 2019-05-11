@@ -320,6 +320,43 @@ cryptoAsync.hmac(algorithm, key, source,
 );
 ```
 
+#### Signature
+This method either returns the RSA signature (when sign = 1), or returns a boolean indicating
+if the provided signature is valid (when sign = 0).
+
+```javascript
+var cryptoAsync = require('@ronomon/crypto-async');
+var algorithm = 'RSA-sha256';
+var sign = 1; // 1 = sign, 0 = verify
+var source = Buffer.alloc(1024 * 1024);
+var key = cryptoAsync.key(rsaPrivateKey);
+cryptoAsync.signature(
+  algorithm,
+  sign,
+  key,
+  source,
+  function(error, signature) {
+    if (error) throw error;
+    console.log('signature:', signature.toString('base64'));
+  }
+);
+
+sign = 0;
+var publicKey = cryptoAsync.key(rsaPublicKey);
+var signature = Buffer.from(rsaSignature, "base64");
+cryptoAsync.signature(
+  algorithm,
+  sign,
+  key,
+  source,
+  signature,
+  function(error, isValid) {
+    if (error) throw error;
+    console.log('signature valid:', isValid);
+  }
+);
+```
+
 ### Zero-Copy Methods
 
 These methods require more arguments but support zero-copy crypto
@@ -474,20 +511,34 @@ cryptoAsync.hmac(
 );
 ```
 
-#### Sign
+#### Signature (Zero-Copy)
 ```javascript
 var cryptoAsync = require('@ronomon/crypto-async');
 var algorithm = 'RSA-sha256';
-var key = Buffer.alloc(1024);
+var sign = 1; // 1 = sign, 0 = verify
 var source = Buffer.alloc(1024 * 1024);
-var target = Buffer.alloc(1024 * 1024);
+var sourceOffset = 512;
+var sourceSize = 65536;
+var target = Buffer.alloc(1024);
+var targetOffset = 52;
+var key = cryptoAsync.key(rsaKey);
 cryptoAsync.sign(
   algorithm,
+  sign,
   key,
   source,
-  function(error, signature) {
+  sourceOffset,
+  sourceSize,
+  target,
+  targetOffset,
+  function(error, targetSize) {
     if (error) throw error;
-    console.log('signature:', signature.toString('base64'));
+    if (sign === 1) {
+      var slice = target.slice(targetOffset, targetOffset + targetSize);
+      console.log('signature:', slice.toString('hex'));
+    } else {
+      console.log('signature valid:', targetSize !== 0);
+    }
   }
 );
 ```
