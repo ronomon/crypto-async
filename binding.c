@@ -664,7 +664,7 @@ void task_execute(napi_env env, void* data) {
       return;
     }
     void *key;
-    if (napi_get_value_external(env, key_external, &key)) {
+    if (napi_get_value_external(env, key_external, &key) != napi_ok) {
       printf("invalid private key");
       abort();
       return;
@@ -1173,7 +1173,7 @@ static napi_value signature(napi_env env, napi_callback_info info) {
   if (!arg_int(env, argv[1], &sign, E_SIGN)) return NULL;
   if (sign != 0 && sign != 1) THROW(env, E_SIGN);
 
-  if (napi_get_value_external(env, argv[2], &key)) {
+  if (napi_get_value_external(env, argv[2], &key) != napi_ok) {
     THROW(env, E_KEY_EXTERNAL);
     return NULL;
   }
