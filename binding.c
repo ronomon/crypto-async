@@ -5,7 +5,6 @@
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/pem.h>
-#include <openssl/rsa.h>
 #include <stdint.h>
 #include <stdlib.h>
 
