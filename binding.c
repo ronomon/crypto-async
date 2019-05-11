@@ -598,6 +598,7 @@ struct task_data {
   int nid;
   int encrypt;
   unsigned char* key;
+  EVP_PKEY* pkey;
   unsigned char* iv;
   unsigned char* source;
   unsigned char* target;
@@ -657,22 +658,10 @@ void task_execute(napi_env env, void* data) {
       task->target
     );
   } else if (task->flags & FLAG_SIGNATURE) {
-    napi_value key_external;
-    if (napi_get_reference_value(env, task->ref_key, &key_external) != napi_ok) {
-      printf("invalid private key");
-      abort();
-      return;
-    }
-    void *key;
-    if (napi_get_value_external(env, key_external, &key) != napi_ok) {
-      printf("invalid private key");
-      abort();
-      return;
-    }
     task->error = execute_signature(
       task->nid,
       task->encrypt,
-      (EVP_PKEY*) key,
+      task->pkey,
       task->source,
       task->source_size,
       task->target,
@@ -732,6 +721,7 @@ static napi_value task_create(
   int nid,
   int encrypt,
   unsigned char* key,
+  EVP_PKEY* pkey,
   unsigned char* iv,
   unsigned char* source,
   unsigned char* target,
@@ -773,6 +763,7 @@ static napi_value task_create(
   task->nid = nid;
   task->encrypt = encrypt;
   task->key = key;
+  task->pkey = pkey;
   task->iv = iv;
   task->source = source;
   task->target = target;
@@ -929,6 +920,7 @@ static napi_value cipher(napi_env env, napi_callback_info info) {
     nid,            // nid
     encrypt,        // encrypt
     key,            // key
+    NULL,           // pkey
     iv,             // iv
     source,         // source
     target,         // target
@@ -997,6 +989,7 @@ static napi_value hash(napi_env env, napi_callback_info info) {
     nid,            // nid
     0,              // encrypt
     NULL,           // key
+    NULL,           // pkey
     NULL,           // iv
     source,         // source
     target,         // target
@@ -1081,6 +1074,7 @@ static napi_value hmac(napi_env env, napi_callback_info info) {
     nid,            // nid
     0,              // encrypt
     key,            // key
+    NULL,           // pkey
     NULL,           // iv
     source,         // source
     target,         // target
@@ -1215,6 +1209,7 @@ static napi_value signature(napi_env env, napi_callback_info info) {
     nid,             // nid
     sign,            // sign
     NULL,            // key
+    pkey,            // pkey
     NULL,            // iv
     source,          // source
     target,          // target
