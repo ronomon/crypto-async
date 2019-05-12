@@ -157,8 +157,11 @@ module.exports.hmac = function(...args) {
   }
 };
 
-module.exports.key = function(key) {
+module.exports.key = function(key, passphrase) {
   if (!Buffer.isBuffer(key)) throw new Error(binding.E_KEY);
+  if (passphrase !== null && passphrase !== undefined) {
+    return binding.key(key, passphrase);
+  }
   return binding.key(key);
 };
 

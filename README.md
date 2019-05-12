@@ -4,7 +4,7 @@ multi-core throughput.
 
 ## Motivation
 #### Some longstanding issues with Node's `crypto` module
-* Did you know that Node's cipher, hash and hmac streams are not truly
+* Did you know that Node's cipher, hash, hmac, sign and verify streams are not truly
 asynchronous? They execute in C, but only in the main thread and so the `crypto`
 module **blocks your event loop**. Encrypting 64 MB of data might block your
 event loop for +/- 70ms. Hashing 64 MB of data might block your event loop for

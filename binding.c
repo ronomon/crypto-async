@@ -5,8 +5,10 @@
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/pem.h>
+#include <openssl/rsa.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define RESOURCE_NAME "@ronomon/crypto-async"
 
@@ -36,6 +38,7 @@
 #define E_KEY_RANGE "keyOffset + keySize > key.length"
 #define E_KEY_SIZE "keySize must be an unsigned integer"
 #define E_OOM "out of memory"
+#define E_PASSPHRASE "passphrase must be a string"
 #define E_SIGN "sign must be 0 or 1"
 #define E_SOURCE "source must be a buffer"
 #define E_SOURCE_OFFSET "sourceOffset must be an unsigned integer"
@@ -1096,40 +1099,79 @@ static napi_value hmac(napi_env env, napi_callback_info info) {
   );
 }
 
+static int read_passphrase_cb(char* buf, int size, int rw_flags, void* init) {
+  if (init != NULL) {
+    int init_length = strlen((char*)init);
+    if (init_length > size) {
+      return 0;
+    }
+    strcpy(buf, init);
+    return init_length;
+  }
+  return 0;
+}
+
 static void key_finalize(napi_env env, void* key, void* hint) {
   EVP_PKEY_free(key);
   key = hint;
 }
 
 static napi_value key(napi_env env, napi_callback_info info) {
-  size_t argc = 1;
-  napi_value argv[1];
+  size_t argc = 2;
+  napi_value argv[2];
   OK(napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
-  if (argc != 1) THROW(env, E_ARGUMENTS);
+  if (argc < 1 || argc > 2) THROW(env, E_ARGUMENTS);
   unsigned char* key = NULL;
   int key_length = 0;
   if (!arg_buf(env, argv[0], &key, &key_length, E_KEY)) {
     THROW(env, E_ARGUMENTS);
     return NULL;
   }
-  BIO *keybio = BIO_new_mem_buf(key, key_length);
-  if (keybio == NULL) {
+  char* passphrase = NULL;
+  if (argc == 2) {
+    size_t passphrase_length = 0;
+    OK(napi_get_value_string_utf8(env, argv[1], NULL, 0, &passphrase_length));
+    if (passphrase_length > 0) {
+      // The length returned does not include the null termination - though it is present
+      passphrase_length += sizeof '\0';
+      passphrase = malloc(passphrase_length);
+      if (!arg_str(env, argv[1], passphrase, passphrase_length, E_PASSPHRASE)) return NULL;
+    }
+  }
+
+  BIO *key_bio = BIO_new_mem_buf(key, key_length);
+  if (key_bio == NULL) {
+    if (passphrase != NULL) free(passphrase);
     THROW(env, "key buffer allocation failed");
     return NULL;
   }
-  EVP_PKEY *pkey = PEM_read_bio_PrivateKey(keybio, NULL, NULL, NULL);
-  if (pkey == NULL) {
-    BIO_free(keybio);
-    keybio = BIO_new_mem_buf(key, key_length);
-    if (keybio == NULL) {
-      THROW(env, "key buffer allocation failed");
-      return NULL;
-    }
-    pkey = PEM_read_bio_PUBKEY(keybio, NULL, NULL, NULL);
+
+  char* pem_name;
+  char* pem_header;
+  unsigned char* pem_data;
+  long pem_length = 0;
+  if (PEM_read_bio(key_bio, &pem_name, &pem_header, &pem_data, &pem_length) != 1) {
+    if (passphrase != NULL) free(passphrase);
+    THROW(env, "unable to parse key");
+    return NULL;
   }
-  BIO_free(keybio);
+  bool is_public = strstr(pem_name, "PUBLIC") != NULL;
+  OPENSSL_free(pem_name);
+  OPENSSL_free(pem_header);
+  OPENSSL_free(pem_data);
+
+  BIO_reset(key_bio);
+  EVP_PKEY *pkey = NULL;
+  if (is_public) {
+    pkey = PEM_read_bio_PUBKEY(key_bio, NULL, read_passphrase_cb, passphrase);
+  } else {
+    pkey = PEM_read_bio_PrivateKey(key_bio, NULL, read_passphrase_cb, passphrase);
+  }
+  BIO_free(key_bio);
+
+  if (passphrase != NULL) free(passphrase);
   if (pkey == NULL) {
-    THROW(env, "invalid public/private key");
+    THROW(env, "unable decode key");
     return NULL;
   }
   napi_value external_key;
