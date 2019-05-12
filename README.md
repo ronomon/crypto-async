@@ -329,7 +329,8 @@ var cryptoAsync = require('@ronomon/crypto-async');
 var algorithm = 'RSA-sha256';
 var sign = 1; // 1 = sign, 0 = verify
 var source = Buffer.alloc(1024 * 1024);
-var key = cryptoAsync.key(rsaPrivateKey);
+var keyPassword = null;
+var key = cryptoAsync.key(rsaPrivateKey, keyPassword);
 cryptoAsync.signature(
   algorithm,
   sign,
@@ -521,7 +522,8 @@ var sourceOffset = 512;
 var sourceSize = 65536;
 var target = Buffer.alloc(1024);
 var targetOffset = 52;
-var key = cryptoAsync.key(rsaKey);
+var keyPassword = "password";
+var key = cryptoAsync.key(rsaKey, keyPassword);
 cryptoAsync.sign(
   algorithm,
   sign,
