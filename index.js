@@ -179,7 +179,7 @@ module.exports.signature = function(...args) {
     providedTarget = true;
     target = args[4];
   } else {
-    target = Buffer.alloc(512);
+    target = Buffer.alloc(2048 * 4);
   }
   if ((!providedTarget && args.length === 4) || (providedTarget && args.length === 5)) {
     const signature_result = binding.signature(
