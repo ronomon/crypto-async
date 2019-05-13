@@ -534,7 +534,11 @@ static const char* execute_signature(
   if (!evp_md) {
     return "nid invalid";
   }
-  EVP_MD_CTX* ctx = EVP_MD_CTX_create();
+  EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+  if (ctx == NULL) {
+    return "context creation failed";
+  }
+  EVP_MD_CTX_set_flags(ctx, EVP_MD_CTX_FLAG_ONESHOT | EVP_MD_CTX_FLAG_FINALISE);
   if (sign == 1) {
     if (EVP_DigestSignInit(ctx, NULL, evp_md, NULL, key) <= 0) {
       EVP_MD_CTX_free(ctx);
@@ -1135,7 +1139,10 @@ static napi_value key(napi_env env, napi_callback_info info) {
       // The length returned does not include the null termination - though it is present
       passphrase_length += sizeof '\0';
       passphrase = malloc(passphrase_length);
-      if (!arg_str(env, argv[1], passphrase, passphrase_length, E_PASSPHRASE)) return NULL;
+      if (!arg_str(env, argv[1], passphrase, passphrase_length, E_PASSPHRASE)) {
+        free(passphrase);
+        return NULL;
+      }
     }
   }
 
