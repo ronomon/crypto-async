@@ -1162,8 +1162,8 @@ static napi_value key(napi_env env, napi_callback_info info) {
     THROW(env, "unable to parse key");
     return NULL;
   }
-  bool is_public = strstr(pem_name, "PUBLIC KEY") != NULL;
-  bool is_private = strstr(pem_name, "PRIVATE KEY") != NULL;
+  bool is_public = pem_name != NULL && strstr(pem_name, "PUBLIC KEY") != NULL;
+  bool is_private = pem_name != NULL && strstr(pem_name, "PRIVATE KEY") != NULL;
   OPENSSL_free(pem_name);
   OPENSSL_free(pem_header);
   OPENSSL_free(pem_data);
