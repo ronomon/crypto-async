@@ -4,7 +4,7 @@ multi-core throughput.
 
 ## Motivation
 #### Some longstanding issues with Node's `crypto` module
-* Did you know that Node's cipher, hash and hmac streams are not truly
+* Did you know that Node's cipher, hash, hmac, sign and verify streams are not truly
 asynchronous? They execute in C, but only in the main thread and so the `crypto`
 module **blocks your event loop**. Encrypting 64 MB of data might block your
 event loop for +/- 70ms. Hashing 64 MB of data might block your event loop for
@@ -320,6 +320,44 @@ cryptoAsync.hmac(algorithm, key, source,
 );
 ```
 
+#### Signature
+This method either returns the RSA signature (when sign = 1), or returns a boolean indicating
+if the provided signature is valid (when sign = 0).
+
+```javascript
+var cryptoAsync = require('@ronomon/crypto-async');
+var algorithm = 'RSA-sha256';
+var sign = 1; // 1 = sign, 0 = verify
+var source = Buffer.alloc(1024 * 1024);
+var keyPassword = null;
+var key = cryptoAsync.key(rsaPrivateKey, keyPassword);
+cryptoAsync.signature(
+  algorithm,
+  sign,
+  key,
+  source,
+  function(error, signature) {
+    if (error) throw error;
+    console.log('signature:', signature.toString('base64'));
+  }
+);
+
+sign = 0;
+var publicKey = cryptoAsync.key(rsaPublicKey);
+var signature = Buffer.from(rsaSignature, "base64");
+cryptoAsync.signature(
+  algorithm,
+  sign,
+  key,
+  source,
+  signature,
+  function(error, isValid) {
+    if (error) throw error;
+    console.log('signature valid:', isValid);
+  }
+);
+```
+
 ### Zero-Copy Methods
 
 These methods require more arguments but support zero-copy crypto
@@ -470,6 +508,39 @@ cryptoAsync.hmac(
     if (error) throw error;
     var slice = target.slice(targetOffset, targetOffset + targetSize);
     console.log('hmac:', slice.toString('hex'));
+  }
+);
+```
+
+#### Signature (Zero-Copy)
+```javascript
+var cryptoAsync = require('@ronomon/crypto-async');
+var algorithm = 'RSA-sha256';
+var sign = 1; // 1 = sign, 0 = verify
+var source = Buffer.alloc(1024 * 1024);
+var sourceOffset = 512;
+var sourceSize = 65536;
+var target = Buffer.alloc(1024);
+var targetOffset = 52;
+var keyPassword = "password";
+var key = cryptoAsync.key(rsaKey, keyPassword);
+cryptoAsync.sign(
+  algorithm,
+  sign,
+  key,
+  source,
+  sourceOffset,
+  sourceSize,
+  target,
+  targetOffset,
+  function(error, targetSize) {
+    if (error) throw error;
+    if (sign === 1) {
+      var slice = target.slice(targetOffset, targetOffset + targetSize);
+      console.log('signature:', slice.toString('hex'));
+    } else {
+      console.log('signature valid:', targetSize !== 0);
+    }
   }
 );
 ```

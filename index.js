@@ -13,7 +13,7 @@ if (!Number.isInteger(binding.CIPHER_BLOCK_MAX)) {
 for (var key in binding) {
   if (/^[A-Z_]+$/.test(key)) {
     module.exports[key] = binding[key];
-  } else if (!/^(cipher|hash|hmac)$/.test(key)) {
+  } else if (!/^(cipher|hash|hmac|key|signature)$/.test(key)) {
     throw new Error('non-whitelisted binding property: ' + key);
   }
 }
@@ -152,6 +152,65 @@ module.exports.hmac = function(...args) {
       function(error, targetSize) {
         if (error) return end(error);
         end(undefined, target.slice(0, targetSize));
+      }
+    );
+  }
+};
+
+module.exports.key = function(key, passphrase) {
+  if (!Buffer.isBuffer(key)) throw new Error(binding.E_KEY);
+  if (passphrase !== null && passphrase !== undefined) {
+    return binding.key(key, passphrase);
+  }
+  return binding.key(key);
+};
+
+module.exports.signature = function(...args) {
+  if (args.length === 8 || args.length === 9) return binding.signature(...args);
+  if (args.length < 4 || args.length > 6) throw new Error(binding.E_ARGUMENTS);
+  var algorithm = args[0];
+  var sign = args[1];
+  var key = args[2];
+  var source = args[3];
+  if (!Buffer.isBuffer(source)) throw new Error(binding.E_SOURCE);
+  var providedTarget = false;
+  var target;
+  if (Buffer.isBuffer(args[4])) {
+    providedTarget = true;
+    target = args[4];
+  } else {
+    target = Buffer.alloc(2048 * 4);
+  }
+  if ((!providedTarget && args.length === 4) || (providedTarget && args.length === 5)) {
+    const signature_result = binding.signature(
+      algorithm,
+      sign,
+      key,
+      source,
+      0,
+      source.length,
+      target,
+      0
+    );
+    if (sign === 1) {
+      return target.slice(0, signature_result);
+    }
+    return signature_result !== 0;
+  } else {
+    var end = args[args.length - 1];
+    if (typeof end !== 'function') throw new Error(binding.E_CALLBACK);
+    return binding.signature(
+      algorithm,
+      sign,
+      key,
+      source,
+      0,
+      source.length,
+      target,
+      0,
+      function(error, targetSize) {
+        if (error) return end(error);
+        end(undefined, sign === 1 ? target.slice(0, targetSize) : targetSize !== 0);
       }
     );
   }

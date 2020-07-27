@@ -4,8 +4,10 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
+#include <openssl/pem.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define RESOURCE_NAME "@ronomon/crypto-async"
 
@@ -29,11 +31,14 @@
 #define E_IV_RANGE "ivOffset + ivSize > iv.length"
 #define E_IV_SIZE "ivSize must be an unsigned integer"
 #define E_KEY "key must be a buffer"
+#define E_KEY_EXTERNAL "key must be created using the key(buffer) method"
 #define E_KEY_INVALID "keySize invalid"
 #define E_KEY_OFFSET "keyOffset must be an unsigned integer"
 #define E_KEY_RANGE "keyOffset + keySize > key.length"
 #define E_KEY_SIZE "keySize must be an unsigned integer"
 #define E_OOM "out of memory"
+#define E_PASSPHRASE "passphrase must be a string"
+#define E_SIGN "sign must be 0 or 1"
 #define E_SOURCE "source must be a buffer"
 #define E_SOURCE_OFFSET "sourceOffset must be an unsigned integer"
 #define E_SOURCE_RANGE "sourceOffset + sourceSize > source.length"
@@ -50,6 +55,7 @@
 #define FLAG_CIPHER 1
 #define FLAG_HASH 2
 #define FLAG_HMAC 4
+#define FLAG_SIGNATURE 8
 
 #define OK(call)                                                               \
   assert((call) == napi_ok);
@@ -514,6 +520,61 @@ static const char* execute_hmac(
   return NULL;
 }
 
+static const char* execute_signature(
+  const int nid,
+  const int sign,
+  EVP_PKEY* key,
+  const unsigned char* source,
+  const int source_size,
+  unsigned char* target,
+  int* target_size
+) {
+  const EVP_MD* evp_md = EVP_get_digestbynid(nid);
+  if (!evp_md) {
+    return "nid invalid";
+  }
+  EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+  if (ctx == NULL) {
+    return "context creation failed";
+  }
+  EVP_MD_CTX_set_flags(ctx, EVP_MD_CTX_FLAG_ONESHOT | EVP_MD_CTX_FLAG_FINALISE);
+  if (sign == 1) {
+    if (EVP_DigestSignInit(ctx, NULL, evp_md, NULL, key) <= 0) {
+      EVP_MD_CTX_free(ctx);
+      return "initialization failed";
+    }
+    if (EVP_DigestSignUpdate(ctx, source, source_size) <= 0) {
+      EVP_MD_CTX_free(ctx);
+      return "update failed";
+    }
+    size_t final_size = *target_size;
+    if (EVP_DigestSignFinal(ctx, target, &final_size) <= 0) {
+      EVP_MD_CTX_free(ctx);
+      return "finalization failed";
+    }
+    EVP_MD_CTX_free(ctx);
+    *target_size = final_size;
+  } else {
+    if (EVP_DigestVerifyInit(ctx, NULL, evp_md, NULL, key) <= 0) {
+      EVP_MD_CTX_free(ctx);
+      return "initialization failed";
+    }
+    if (EVP_DigestVerifyUpdate(ctx, source, source_size) <= 0) {
+      EVP_MD_CTX_free(ctx);
+      return "update failed";
+    }
+    size_t final_size = *target_size;
+    int verification_status = EVP_DigestVerifyFinal(ctx, target, final_size);
+    if (verification_status == 1) {
+      EVP_MD_CTX_free(ctx);
+    } else {
+      *target_size = 0;
+      EVP_MD_CTX_free(ctx);
+    }
+  }
+  return NULL;
+}
+
 static int range(
   napi_env env,
   const int offset,
@@ -543,6 +604,7 @@ struct task_data {
   int nid;
   int encrypt;
   unsigned char* key;
+  EVP_PKEY* pkey;
   unsigned char* iv;
   unsigned char* source;
   unsigned char* target;
@@ -601,6 +663,16 @@ void task_execute(napi_env env, void* data) {
       task->source_size,
       task->target
     );
+  } else if (task->flags & FLAG_SIGNATURE) {
+    task->error = execute_signature(
+      task->nid,
+      task->encrypt,
+      task->pkey,
+      task->source,
+      task->source_size,
+      task->target,
+      &task->target_size
+    );
   } else {
     printf("unrecognized task->flags=%i\n", task->flags);
     abort();
@@ -655,6 +727,7 @@ static napi_value task_create(
   int nid,
   int encrypt,
   unsigned char* key,
+  EVP_PKEY* pkey,
   unsigned char* iv,
   unsigned char* source,
   unsigned char* target,
@@ -696,6 +769,7 @@ static napi_value task_create(
   task->nid = nid;
   task->encrypt = encrypt;
   task->key = key;
+  task->pkey = pkey;
   task->iv = iv;
   task->source = source;
   task->target = target;
@@ -852,6 +926,7 @@ static napi_value cipher(napi_env env, napi_callback_info info) {
     nid,            // nid
     encrypt,        // encrypt
     key,            // key
+    NULL,           // pkey
     iv,             // iv
     source,         // source
     target,         // target
@@ -920,6 +995,7 @@ static napi_value hash(napi_env env, napi_callback_info info) {
     nid,            // nid
     0,              // encrypt
     NULL,           // key
+    NULL,           // pkey
     NULL,           // iv
     source,         // source
     target,         // target
@@ -1004,6 +1080,7 @@ static napi_value hmac(napi_env env, napi_callback_info info) {
     nid,            // nid
     0,              // encrypt
     key,            // key
+    NULL,           // pkey
     NULL,           // iv
     source,         // source
     target,         // target
@@ -1022,6 +1099,188 @@ static napi_value hmac(napi_env env, napi_callback_info info) {
     NULL,           // ref_aad
     NULL,           // ref_tag
     argv[9]         // ref_callback
+  );
+}
+
+static int read_passphrase_cb(char* buf, int size, int rw_flags, void* init) {
+  if (init != NULL) {
+    int init_length = strlen((char*)init);
+    if (init_length > size) {
+      return 0;
+    }
+    strcpy(buf, init);
+    return init_length;
+  }
+  return 0;
+}
+
+static void key_finalize(napi_env env, void* key, void* hint) {
+  EVP_PKEY_free(key);
+  key = hint;
+}
+
+static napi_value key(napi_env env, napi_callback_info info) {
+  size_t argc = 2;
+  napi_value argv[2];
+  OK(napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
+  if (argc < 1 || argc > 2) THROW(env, E_ARGUMENTS);
+  unsigned char* key = NULL;
+  int key_length = 0;
+  if (!arg_buf(env, argv[0], &key, &key_length, E_KEY)) {
+    THROW(env, E_ARGUMENTS);
+    return NULL;
+  }
+  char* passphrase = NULL;
+  if (argc == 2) {
+    size_t passphrase_length = 0;
+    OK(napi_get_value_string_utf8(env, argv[1], NULL, 0, &passphrase_length));
+    if (passphrase_length > 0) {
+      // The length returned does not include the null termination - though it is present
+      passphrase_length += sizeof '\0';
+      passphrase = malloc(passphrase_length);
+      if (!arg_str(env, argv[1], passphrase, passphrase_length, E_PASSPHRASE)) {
+        free(passphrase);
+        return NULL;
+      }
+    }
+  }
+
+  BIO *key_bio = BIO_new_mem_buf(key, key_length);
+  if (key_bio == NULL) {
+    if (passphrase != NULL) free(passphrase);
+    THROW(env, "key buffer allocation failed");
+    return NULL;
+  }
+
+  char* pem_name;
+  char* pem_header;
+  unsigned char* pem_data;
+  long pem_length = 0;
+  if (PEM_read_bio(key_bio, &pem_name, &pem_header, &pem_data, &pem_length) != 1) {
+    if (passphrase != NULL) free(passphrase);
+    THROW(env, "unable to parse key");
+    return NULL;
+  }
+  bool is_public = pem_name != NULL && strstr(pem_name, "PUBLIC KEY") != NULL;
+  bool is_private = pem_name != NULL && strstr(pem_name, "PRIVATE KEY") != NULL;
+  OPENSSL_free(pem_name);
+  OPENSSL_free(pem_header);
+  OPENSSL_free(pem_data);
+
+  BIO_reset(key_bio);
+  EVP_PKEY *pkey = NULL;
+  if (is_public) {
+    pkey = PEM_read_bio_PUBKEY(key_bio, NULL, read_passphrase_cb, passphrase);
+  } else if (is_private) {
+    pkey = PEM_read_bio_PrivateKey(key_bio, NULL, read_passphrase_cb, passphrase);
+  } else {
+    if (passphrase != NULL) free(passphrase);
+    THROW(env, "unrecognized key type");
+    return NULL;
+  }
+  BIO_free(key_bio);
+
+  if (passphrase != NULL) free(passphrase);
+  if (pkey == NULL) {
+    THROW(env, "unable decode key");
+    return NULL;
+  }
+  napi_value external_key;
+  OK(napi_create_external(env, pkey, key_finalize, NULL, &external_key));
+  return external_key;
+}
+
+static napi_value signature(napi_env env, napi_callback_info info) {
+  size_t argc = 9;
+  napi_value argv[9];
+  OK(napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
+  if (argc != 8 && argc != 9) THROW(env, E_ARGUMENTS);
+
+  // arguments
+  char algorithm[32];
+  int sign = 0;
+  void* key;
+  unsigned char* source = NULL;
+  int source_offset = 0;
+  int source_size = 0;
+  unsigned char* target = NULL;
+  int target_offset = 0;
+
+  int source_length = 0;
+  int target_length = 0;
+  int target_size = 0;
+
+  if (!arg_str(env, argv[0], algorithm, 32, E_ALGORITHM)) return NULL;
+  const EVP_MD* evp_md = EVP_get_digestbyname(algorithm);
+  if (!evp_md) THROW(env, E_ALGORITHM_UNKNOWN);
+  // We avoid EVP_CIPHER_type() since this returns `NID_undef` for some ciphers:
+  int nid = EVP_MD_type(evp_md);
+  assert(nid != NID_undef);
+
+  if (!arg_int(env, argv[1], &sign, E_SIGN)) return NULL;
+  if (sign != 0 && sign != 1) THROW(env, E_SIGN);
+
+  if (napi_get_value_external(env, argv[2], &key) != napi_ok) {
+    THROW(env, E_KEY_EXTERNAL);
+    return NULL;
+  }
+
+  if (
+    !arg_buf(env, argv[3], &source, &source_length, E_SOURCE) ||
+    !arg_int(env, argv[4], &source_offset, E_SOURCE_OFFSET) ||
+    !arg_int(env, argv[5], &source_size, E_SOURCE_SIZE) ||
+    !arg_buf(env, argv[6], &target, &target_length, E_TARGET) ||
+    !arg_int(env, argv[7], &target_offset, E_TARGET_OFFSET) ||
+    !range(env, source_offset, source_size, source_length, E_SOURCE_RANGE)
+  ) {
+    return NULL;
+  }
+  EVP_PKEY *pkey = (EVP_PKEY*) key;
+  target_size = EVP_PKEY_size(pkey);
+  if (!range(env, target_offset, target_size, target_length, E_TARGET_RANGE)) return NULL;
+  source += source_offset;
+  target += target_offset;
+
+  if (argc == 8) {
+    const char* error = execute_signature(
+      nid,
+      sign,
+      pkey,
+      source,
+      source_size,
+      target,
+      &target_size
+    );
+    if (error) THROW(env, error);
+    napi_value result;
+    OK(napi_create_int64(env, target_size, &result));
+    return result;
+  }
+  return task_create(
+    env,             // env
+    FLAG_SIGNATURE,  // flags
+    nid,             // nid
+    sign,            // sign
+    NULL,            // key
+    pkey,            // pkey
+    NULL,            // iv
+    source,          // source
+    target,          // target
+    NULL,            // aad
+    NULL,            // tag
+    0,               // key_size
+    0,               // iv_size
+    source_size,     // source_size
+    target_size,     // target_size
+    0,               // aad_size
+    0,               // tag_size
+    argv[2],         // ref_key
+    NULL,            // ref_iv
+    argv[3],         // ref_source
+    argv[6],         // ref_target
+    NULL,            // ref_aad
+    NULL,            // ref_tag
+    argv[8]          // ref_callback
   );
 }
 
@@ -1052,6 +1311,12 @@ static napi_value Init(napi_env env, napi_value exports) {
   napi_value fn_hmac;
   OK(napi_create_function(env, NULL, 0, hmac, NULL, &fn_hmac));
   OK(napi_set_named_property(env, exports, "hmac", fn_hmac));
+  napi_value fn_key;
+  OK(napi_create_function(env, NULL, 0, key, NULL, &fn_key));
+  OK(napi_set_named_property(env, exports, "key", fn_key));
+  napi_value fn_signature;
+  OK(napi_create_function(env, NULL, 0, signature, NULL, &fn_signature));
+  OK(napi_set_named_property(env, exports, "signature", fn_signature));
   napi_value evp_max_block;
   OK(napi_create_int64(env, (int64_t) EVP_MAX_BLOCK_LENGTH, &evp_max_block));
   OK(napi_set_named_property(env, exports, "CIPHER_BLOCK_MAX", evp_max_block));
@@ -1076,6 +1341,7 @@ static napi_value Init(napi_env env, napi_value exports) {
   export_error(env, exports, "E_IV_RANGE", E_IV_RANGE);
   export_error(env, exports, "E_IV_SIZE", E_IV_SIZE);
   export_error(env, exports, "E_KEY", E_KEY);
+  export_error(env, exports, "E_KEY_EXTERNAL", E_KEY_EXTERNAL);
   export_error(env, exports, "E_KEY_INVALID", E_KEY_INVALID);
   export_error(env, exports, "E_KEY_OFFSET", E_KEY_OFFSET);
   export_error(env, exports, "E_KEY_RANGE", E_KEY_RANGE);
@@ -1093,6 +1359,7 @@ static napi_value Init(napi_env env, napi_value exports) {
   export_error(env, exports, "E_TARGET", E_TARGET);
   export_error(env, exports, "E_TARGET_OFFSET", E_TARGET_OFFSET);
   export_error(env, exports, "E_TARGET_RANGE", E_TARGET_RANGE);
+  export_error(env, exports, "E_SIGN", E_SIGN);
   return exports;
 }
 
