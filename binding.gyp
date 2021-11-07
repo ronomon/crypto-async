@@ -2,7 +2,8 @@
   "targets": [
     {
       "target_name": "binding",
-      "sources": [ "binding.c" ]
+      "sources": [ "binding.c" ],
+      "defines": [ "OPENSSL_API_COMPAT=OPENSSL_CONFIGURED_API" ]
     },
     {
       "target_name": "copy",

@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <math.h>
 #include <node_api.h>
+#include <openssl/configuration.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
